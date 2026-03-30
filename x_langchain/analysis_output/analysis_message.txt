@@ -1,0 +1,20 @@
+Analysis of Sales Data:
+
+Dataset Columns: Date, Product, Units Sold, Revenue
+
+Summary:
+- Widget A had sales on 2025-08-01 (10 units, $250) and 2025-08-03 (7 units, $175).
+- Widget B had transactions on 2025-08-02 (5 units, $125) and 2025-08-05 (8 units, $200).
+- Widget C recorded sales only on 2025-08-04 (3 units, $90).
+
+Insights:
+1. Widget A showed early period demand and maintained moderate performance.
+2. Widget B saw a notable increase in sales on the last recorded day.
+3. Widget C had the lowest sales figures, suggesting less demand.
+
+Trends:
+- Widget A and Widget B are main contributors to total sales and revenue.
+- Widget B's unit sales increased notably from the earlier to the later period.
+- Widget C appears niche with low single-day sales.
+
+A visual plot is generated to illustrate trends by product over time. The plot file accompanies this text analysis.

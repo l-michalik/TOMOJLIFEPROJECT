@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, TypeAlias
 
-from agentic_platform_enginner.contracts.task_input_types import (
+from contracts.task_input_types import (
     EXECUTION_ENVIRONMENTS,
     REQUESTER_ROLES,
     SUBMISSION_SOURCES,
@@ -49,6 +49,7 @@ class IntegerField:
 class ArrayField:
     items: "FieldDefinition"
     description: str | None = None
+    min_items: int | None = None
     max_items: int | None = None
     unique_items: bool = False
 
@@ -58,6 +59,7 @@ class ObjectField:
     properties: dict[str, "FieldDefinition"]
     description: str | None = None
     required: frozenset[str] = field(default_factory=frozenset)
+    min_properties: int | None = None
     additional_properties: bool = False
 
 
@@ -109,6 +111,7 @@ REQUESTER_FIELD: Final[ObjectField] = ObjectField(
         ),
     },
     required=frozenset({"id"}),
+    min_properties=1,
 )
 
 TASK_PARAMETERS_FIELD: Final[ObjectField] = ObjectField(
@@ -143,10 +146,12 @@ TASK_PARAMETERS_FIELD: Final[ObjectField] = ObjectField(
         ),
         "tags": ArrayField(
             items=StringField(min_length=1, max_length=32),
+            min_items=1,
             max_items=20,
             unique_items=True,
         ),
-    }
+    },
+    min_properties=1,
 )
 
 METADATA_FIELD: Final[ObjectField] = ObjectField(
@@ -165,7 +170,8 @@ METADATA_FIELD: Final[ObjectField] = ObjectField(
             min_length=8,
             max_length=128,
         ),
-    }
+    },
+    min_properties=1,
 )
 
 TASK_INPUT_CONTRACT: Final[ObjectField] = ObjectField(
@@ -287,6 +293,8 @@ def _field_to_json_schema(field_definition: FieldDefinition) -> JsonSchema:
         }
         if field_definition.description is not None:
             schema["description"] = field_definition.description
+        if field_definition.min_items is not None:
+            schema["minItems"] = field_definition.min_items
         if field_definition.max_items is not None:
             schema["maxItems"] = field_definition.max_items
         if field_definition.unique_items:
@@ -303,6 +311,8 @@ def _field_to_json_schema(field_definition: FieldDefinition) -> JsonSchema:
     }
     if field_definition.description is not None:
         schema["description"] = field_definition.description
+    if field_definition.min_properties is not None:
+        schema["minProperties"] = field_definition.min_properties
     if field_definition.required:
         schema["required"] = sorted(field_definition.required)
     return schema

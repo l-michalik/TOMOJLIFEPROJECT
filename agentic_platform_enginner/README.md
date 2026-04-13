@@ -44,6 +44,8 @@ This repository includes:
 - for `deploy`, `restart`, and `rollback` operations, `parameters.serviceName` is required
 - for `deploy` operations, `parameters.targetVersion` is also required
 - the schema rejects unknown fields through `additionalProperties=false`
+- `parameters` and `metadata` cannot be empty objects when provided
+- `parameters.tags` must contain at least one item when provided
 
 ## Example Valid Payload
 
@@ -75,20 +77,32 @@ This repository includes:
 
 ## Usage
 
+Run commands from the project directory:
+
+```bash
+cd agentic_platform_enginner
+```
+
 Print the schema:
 
 ```bash
-uv run main.py --print-schema
+uv run python main.py --print-schema
 ```
 
 Validate a payload from file:
 
 ```bash
-uv run main.py --input payload.json
+uv run python main.py --input payload.json
 ```
 
 Validate and normalize to the supervisor contract:
 
 ```bash
-uv run main.py --input payload.json --normalize
+uv run python main.py --input payload.json --normalize
+```
+
+Run tests:
+
+```bash
+uv run python -m unittest discover -s tests
 ```

@@ -6,11 +6,11 @@ from pathlib import Path
 import sys
 
 if __package__ in {None, ""}:
-    package_root = Path(__file__).resolve().parent.parent
+    package_root = Path(__file__).resolve().parent
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
-from agentic_platform_enginner.schema.input_schema import (
+from schema.input_schema import (
     ValidationError,
     build_supervisor_input,
     export_task_input_schema,

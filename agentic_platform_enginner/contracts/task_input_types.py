@@ -48,8 +48,8 @@ class TaskSubmission(TypedDict):
     taskDescription: str
     source: SubmissionSource
     requester: Requester
-    parameters: TaskParameters
-    metadata: SubmissionMetadata
+    parameters: NotRequired[TaskParameters]
+    metadata: NotRequired[SubmissionMetadata]
 
 
 class SupervisorContext(TypedDict):

@@ -3,14 +3,14 @@ from __future__ import annotations
 import re
 from typing import cast
 
-from agentic_platform_enginner.contracts.task_input_types import (
+from contracts.task_input_types import (
     Requester,
     SubmissionMetadata,
     SupervisorInput,
     TaskParameters,
     TaskSubmission,
 )
-from agentic_platform_enginner.schema.task_input_schema import (
+from schema.task_input_schema import (
     ArrayField,
     BooleanField,
     CROSS_FIELD_RULES,
@@ -71,6 +71,12 @@ def _validate_object(value: object, field_definition: ObjectField, field_path: s
     if not isinstance(value, dict):
         label = "Payload" if field_path == "root" else f"Field '{field_path}'"
         raise ValidationError(f"{label} must be a JSON object." if field_path == "root" else f"{label} must be an object.")
+
+    if field_definition.min_properties is not None and len(value) < field_definition.min_properties:
+        raise ValidationError(
+            f"Field '{field_path}' must contain at least {field_definition.min_properties} propert"
+            f"{'y' if field_definition.min_properties == 1 else 'ies'}."
+        )
 
     unknown_fields = sorted(set(value) - set(field_definition.properties))
     if unknown_fields:
@@ -145,6 +151,9 @@ def _validate_integer(value: object, field_definition: IntegerField, field_path:
 def _validate_array(value: object, field_definition: ArrayField, field_path: str) -> list[JsonValue]:
     if not isinstance(value, list):
         raise ValidationError(f"Field '{field_path}' must be an array.")
+
+    if field_definition.min_items is not None and len(value) < field_definition.min_items:
+        raise ValidationError(f"Field '{field_path}' must contain at least {field_definition.min_items} entries.")
 
     if field_definition.max_items is not None and len(value) > field_definition.max_items:
         raise ValidationError(f"Field '{field_path}' must not contain more than {field_definition.max_items} entries.")

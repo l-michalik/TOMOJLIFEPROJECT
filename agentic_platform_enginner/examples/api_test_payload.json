@@ -1,0 +1,23 @@
+{
+  "taskDescription": "Run a dry-run diagnostic of the notifications-worker service in dev for smoke testing.",
+  "source": "api",
+  "requester": {
+    "id": "test-runner-01",
+    "role": "admin",
+    "displayName": "Integration Test Runner"
+  },
+  "parameters": {
+    "environment": "dev",
+    "serviceName": "notifications-worker",
+    "operation": "diagnose",
+    "dryRun": true,
+    "timeoutSeconds": 120,
+    "tags": [
+      "smoke-test",
+      "ci"
+    ]
+  },
+  "metadata": {
+    "correlationId": "api-test-2026-04-13-smoke-01"
+  }
+}

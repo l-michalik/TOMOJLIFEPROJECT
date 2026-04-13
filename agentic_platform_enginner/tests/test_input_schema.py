@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import unittest
 
 from schema.input_schema import ValidationError, validate_task_input
@@ -29,6 +31,9 @@ def _valid_payload() -> dict[str, object]:
             "correlationId": "req-2026-04-13-0001",
         },
     }
+
+
+EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
 
 class ValidateTaskInputTests(unittest.TestCase):
@@ -89,6 +94,13 @@ class ValidateTaskInputTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValidationError, "Field 'requester' must be an object."):
             validate_task_input(payload)
+
+    def test_example_payloads_are_valid(self) -> None:
+        for payload_path in sorted(EXAMPLES_DIR.glob("*.json")):
+            with self.subTest(payload=payload_path.name):
+                payload = json.loads(payload_path.read_text(encoding="utf-8"))
+                validated = validate_task_input(payload)
+                self.assertEqual(validated["source"], payload["source"])
 
 
 if __name__ == "__main__":

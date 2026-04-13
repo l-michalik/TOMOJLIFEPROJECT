@@ -15,6 +15,7 @@ This repository includes:
 - schema source module: [schema/task_input_schema.py](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/schema/task_input_schema.py)
 - Python validator: [schema/input_schema.py](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/schema/input_schema.py)
 - typed payload definitions: [contracts/task_input_types.py](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/contracts/task_input_types.py)
+- sample payloads: [examples/](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/examples)
 - simple CLI for validation and normalization: [main.py](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/main.py)
 
 ## Required Fields
@@ -47,33 +48,11 @@ This repository includes:
 - `parameters` and `metadata` cannot be empty objects when provided
 - `parameters.tags` must contain at least one item when provided
 
-## Example Valid Payload
+## Sample Payloads
 
-```json
-{
-  "taskDescription": "Deploy a new version of the billing-api service to production.",
-  "source": "jira",
-  "requester": {
-    "id": "u-12345",
-    "role": "devops",
-    "displayName": "John Smith"
-  },
-  "parameters": {
-    "environment": "prod",
-    "serviceName": "billing-api",
-    "operation": "deploy",
-    "targetVersion": "1.8.2",
-    "approvalRequired": true,
-    "dryRun": false,
-    "timeoutSeconds": 900,
-    "tags": ["release", "billing"]
-  },
-  "metadata": {
-    "ticketId": "APE-142",
-    "correlationId": "req-2026-04-13-0001"
-  }
-}
-```
+- Jira request: [examples/jira_payload.json](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/examples/jira_payload.json)
+- Chat request: [examples/chat_payload.json](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/examples/chat_payload.json)
+- Test/API request: [examples/api_test_payload.json](/Users/lukaszmichalik/Documents/GitHub/TOMOJLIFEPROJECT/agentic_platform_enginner/examples/api_test_payload.json)
 
 ## Usage
 
@@ -92,13 +71,19 @@ uv run python main.py --print-schema
 Validate a payload from file:
 
 ```bash
-uv run python main.py --input payload.json
+uv run python main.py --input examples/jira_payload.json
 ```
 
 Validate and normalize to the supervisor contract:
 
 ```bash
-uv run python main.py --input payload.json --normalize
+uv run python main.py --input examples/chat_payload.json --normalize
+```
+
+Validate the test/API example:
+
+```bash
+uv run python main.py --input examples/api_test_payload.json
 ```
 
 Run tests:

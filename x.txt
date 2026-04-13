@@ -1,0 +1,213 @@
+Agent Harness,Abstraction that standardizes the tool-calling loop while embedding higher-order capabilities like planning, memory, and subagent orchestration beyond base agent frameworks
+LangGraph Runtime Integration,Provides durable execution semantics with resumability streaming and human-in-the-loop checkpoints that persist across agent runs
+write_todos Tool,Built-in planning middleware enabling dynamic task decomposition with iterative refinement rather than static upfront planning
+Virtual Filesystem Context Offloading,Mechanism to externalize large intermediate data into storage instead of prompt tokens preventing context window saturation and supporting arbitrarily large tool outputs
+Pluggable Filesystem Backends,Architecture allowing interchangeable storage layers such as in-memory disk persistent stores and sandboxed environments
+Composite Backend Routing,Routes filesystem operations to different backends by path context or policy enabling hybrid persistence strategies
+Subagent Context Isolation via task Tool,Spawns specialized agents with isolated context scopes to prevent contamination of the main agent's working memory during deep subtasks
+LangGraph Memory Store,Cross-thread persistent memory system enabling agents to retain and retrieve structured information across independent executions
+Deep Agents vs LangChain create_agent,Deep Agents adds built-in planning filesystem abstraction and subagent orchestration whereas create_agent remains a minimal primitive requiring manual composition
+Deep Agents CLI Headless Mode,Supports non-interactive execution via the -n flag for deterministic scriptable runs without conversational overhead
+Sandboxed Execution Backends,Supports isolated runtime environments such as Modal Daytona and Deno for stateful or unsafe execution without mutating the host system
+Deep Agents model requirement,The configured model must support tool calling or the agent harness cannot function
+create_deep_agent default model,If no model is passed create_deep_agent defaults to anthropic:claude-sonnet-4-6
+Provider model naming,Model identifiers are provider-prefixed and provider-specific such as openai:gpt-5.4 or openrouter:anthropic/claude-sonnet-4-6 rather than provider-agnostic names
+Streaming observability,Streaming surfaces intermediate agent activity including tool calls tool outputs and subagent work rather than only final tokens
+LangChain model retry defaults,Chat models retry failed API calls up to 6 times with exponential backoff only for network failures 429s and 5xx errors not for 401 or 404 client errors
+Checkpointer requirement for HITL,Human-in-the-loop requires a checkpointer and does not work with interrupt_on alone
+Middleware state safety,Custom middleware should persist cross-hook values in graph state rather than instance attributes because subagents parallel tools and concurrent threads can cause race conditions
+PatchToolCallsMiddleware purpose,Repairs message history when tool calls are interrupted or cancelled before results return preventing corrupted agent state
+Skills loading behavior,Skills are progressively disclosed and loaded only when the agent determines they are relevant reducing startup token usage and context overhead
+Skill and memory backend prerequisite,When using skills or memory the expected files must already exist in the configured backend before agent creation
+StateBackend persistence scope,StateBackend persists files only within a single thread because its filesystem lives in LangGraph state rather than durable storage
+StoreBackend isolation,StoreBackend persists across threads so multi-user deployments should use a namespace factory to prevent cross-user data leakage
+LocalShellBackend risk profile,LocalShellBackend exposes host filesystem read write access plus unrestricted shell execution making it materially riskier than FilesystemBackend
+Sandbox backend operational model,Sandbox backends provide isolated filesystem and execute support so agents can install dependencies and run commands without mutating the host
+FilesystemBackend with virtual_mode,FilesystemBackend can expose local disk through a virtualized path layer via virtual_mode instead of directly mirroring raw host paths
+Subagent model override,Each subagent can override the parent model independently otherwise it inherits the main agent model
+Middleware-injected prompt composition,The built-in system prompt is augmented by middleware that appends instructions for special tools such as filesystem tools
+Memory file convention,Deep Agents use AGENTS.md files as memory sources rather than a bespoke memory API
+Structured output return channel,When response_format is supplied the validated structured object is returned under structured_response in agent state rather than only as free-form text
+Human approval granularity,interrupt_on supports per-tool approval policies including boolean defaults or explicit allowed_decisions sets such as approve and reject without edit
+Store provisioning on LangSmith Deployment,When deploying on LangSmith Deployment you should omit the store argument because the platform provisions it automatically
+StateBackend skill seeding,With StateBackend skills or memory files must be injected per invocation through the files payload using virtual paths beginning with /
+Azure init_chat_model nuance,For azure_openai models init_chat_model may also require azure_deployment even when the model is specified as azure_openai:gpt-5.2
+create_summarization_tool_middleware benefit,Allows agents to trigger summarization opportunistically between tasks instead of relying only on fixed token-threshold summarization
+Thread vs User vs Assistant memory isolation,Thread scopes message history and scratch files per conversation while user and assistant scopes enable cross-conversation persistence with different sharing semantics
+Authorization handlers post-authentication behavior,They can attach ownership metadata dynamically filter accessible resources and enforce runtime denial via 403 responses
+Prompt injection risk in shared memory,Shared writable memory across users creates cross-user prompt injection risk and therefore requires strict write controls or read-only enforcement
+Namespace factory usage in StoreBackend,Dynamic scoping of persistent memory is achieved by computing namespaces from runtime context such as user_id assistant_id or org_id
+Checkpointing granularity in LangGraph,State is persisted at every step enabling partial execution recovery time travel and auditability without rerunning prior steps
+Async graph factory requirement for sandboxes,Sandbox provisioning depends on runtime identifiers like thread_id so async factory functions are needed instead of static graph definitions
+Sandbox lifecycle tradeoff,Thread-scoped sandboxes maximize isolation but require repeated setup whereas assistant-scoped sandboxes amortize setup cost at the expense of possible unbounded state growth
+Sandbox label-based lookup mechanism,Providers use metadata labels such as thread_id or assistant_id to deterministically retrieve or create sandbox instances across runs
+Auth proxy for sandbox secrets,Intercepts outbound requests and injects credentials at runtime so API keys are not exposed inside sandbox filesystems or environments
+Middleware retry scoping strategy,ToolRetryMiddleware should target only failure-prone external tools rather than blanket retries to avoid unnecessary execution overhead
+Run vs thread limits in rate limiting,run_limit caps calls per invocation while thread_limit enforces cumulative limits across a conversation and therefore requires persistence
+PII middleware transformation strategies,Supports redact mask hash or block operations with deterministic hashing for stable anonymization across sessions
+File sync via middleware hooks,abefore_agent and aafter_agent can implement bidirectional transfer between persistent storage and sandbox state
+StateBackend checkpoint cost implication,Large files degrade performance because they are included in step-level checkpointing making StateBackend unsuitable for heavy data storage
+Recursion limit necessity for deep agents,A high recursionLimit is needed to avoid premature termination in complex workflows involving multiple subagents or long execution chains
+write_todos State Persistence,Task list is stored inside agent state rather than prompt context enabling durable multi-step planning across turns and resumable execution
+Filesystem-backed Context Offloading,Large intermediate outputs are externalized into files instead of tokens allowing the agent to bypass context window limits while still retaining access via retrieval tools
+read_file Offset/Limit Semantics,Supports partial reads of large files which enables incremental context loading and prevents token overflow when handling large artifacts
+Multimodal File Reads in read_file,Image files are returned as structured multimodal blocks rather than raw bytes allowing downstream model-native vision processing without additional tooling
+edit_file Deterministic Replacement Model,Operates via exact string matching (not diff/patch) which creates brittleness but guarantees deterministic transformations suitable for controlled edits
+grep Multi-Mode Output Control,Supports returning filenames only, contextual matches, or counts enabling the agent to trade off between recall and token efficiency during search
+Sandbox-gated execute Tool Injection,execute tool is conditionally exposed only when backend implements SandboxBackendProtocol creating a capability boundary enforced at runtime rather than configuration
+execute Output Truncation Strategy,Large stdout/stderr streams are truncated and redirected to files forcing the agent to iteratively inspect outputs instead of consuming them in a single step
+Subagent Stateless Completion Contract,Subagents cannot stream intermediate messages back and must return a single final result which enforces atomic task delegation patterns
+Subagent Context Compression Boundary,All subagent internal reasoning and intermediate context are collapsed into a final report preventing context pollution in the parent agent
+Parallel Subagent Execution Model,Multiple subagents can operate concurrently enabling implicit parallelism without requiring explicit async orchestration in the main agent loop
+Progressive Skill Loading Mechanism,Only skill metadata is loaded initially and full skill content is lazily injected upon relevance detection reducing baseline token overhead
+Skill Packaging via Filesystem,Skills can include executable scripts and assets colocated with SKILL.md enabling tightly coupled tool+instruction bundles beyond prompt-only augmentation
+Memory Always-on Loading vs Skills,Memory files are injected into every run unlike skills which are conditionally loaded creating a persistent biasing layer over agent behavior
+Memory Backend Abstraction Layer,Memory can be stored across StateBackend, StoreBackend, or FilesystemBackend enabling flexible persistence strategies aligned with deployment architecture
+interrupt_on Pre-Tool Execution Hooks,Interrupts occur before tool execution allowing modification of arguments rather than post-hoc validation which enables proactive safety enforcement
+Context Compression via Summarization Pipeline,Automatic summarization reduces historical interaction footprint while preserving salient state allowing long-horizon reasoning within fixed token budgets
+Filesystem as Shared Substrate Across Capabilities,Planning artifacts, memory, skills, and execution outputs all converge on the same virtual filesystem abstraction enabling unified data access patterns
+Sandbox Environment Reproducibility Guarantee,Execution environments are isolated and consistent across runs ensuring deterministic behavior independent of host machine configuration
+Dynamic Prompt via Middleware,System prompts can be made context-aware by injecting runtime-dependent instructions using middleware that reads runtime.context and runtime.store, enabling per-invocation behavioral changes without modifying static system_prompt
+Memory vs Skills Injection Model,Memory (AGENTS.md) is always injected into the system prompt causing constant token cost, whereas skills use progressive disclosure loading full content only when deemed relevant, optimizing context utilization
+ToolRuntime Context Access Pattern,Tools receive runtime.context and runtime.store via ToolRuntime injection, allowing secure access to per-run metadata without exposing it directly in the model prompt
+Runtime Context Propagation Semantics,Runtime context is automatically inherited by all subagents, meaning sensitive or global configuration implicitly propagates unless explicitly namespaced
+Offloading Trigger Threshold Mechanics,Tool inputs or outputs exceeding ~20k tokens are automatically externalized to the filesystem and replaced with references, preventing immediate context overflow
+Deferred Context Truncation Strategy,Actual truncation of large tool inputs only occurs when total context reaches ~85% of model window, ensuring maximum retention before compression
+Partial Output Substitution Pattern,Large tool outputs are replaced with file path references plus a preview (first ~10 lines), enabling lazy retrieval instead of full context inclusion
+Summarization Fallback on Overflow Errors,If a ContextOverflowError occurs during model execution, the system immediately triggers summarization and retries with compressed context rather than failing
+Dual-Layer Summarization Architecture,Conversation history is replaced in-context with a structured summary while the full original transcript is preserved in the filesystem for later retrieval
+Summarization Retention Heuristics,When summarization triggers, only ~10% of tokens are preserved as recent context while older messages are condensed into summaries
+Subagent Context Isolation Model,Subagents execute in completely fresh contexts and return only final outputs, preventing intermediate reasoning/tool traces from polluting the parent agent context
+Subagent Configuration Decoupling,Each subagent can independently define model, tools, system prompt, and skills, enabling heterogeneous execution environments within a single agent system
+Filesystem as Context Extension Layer,The virtual filesystem acts as an external memory layer allowing arbitrarily large data persistence and selective retrieval via read/search tools instead of prompt stuffing
+CompositeBackend Routing Semantics,Filesystem paths (e.g. /memories/) can be selectively routed to persistent stores while others remain ephemeral, enabling hybrid memory persistence strategies
+Long-Term Memory Write Pattern,Agents must be explicitly instructed via system prompt where and what to persist (e.g. /memories/), otherwise no automatic long-term storage occurs
+Skill Loading Granularity Constraint,Overly broad or overlapping skills degrade relevance scoring and increase unnecessary context loading, reducing efficiency of progressive disclosure
+Tool Prompt Augmentation via Middleware,Built-in tools inject additional system prompt instructions through middleware, meaning tool behavior is shaped both by schema and implicit prompt augmentation
+Summarization Tool vs Automatic Summarization,Explicit summarization tool allows strategic compression timing (e.g. between tasks), while automatic summarization is reactive at token thresholds
+Context Compression Hierarchy,Offloading is preferred over summarization; summarization only occurs when no more context is eligible for offloading, preserving fidelity as long as possible
+CompositeBackend Prefix Precedence,Routing uses longest-prefix match so more specific paths override broader ones which can create subtle shadowing bugs in complex routing trees
+StateBackend Subagent Leakage,StateBackend is shared across supervisor and subagents meaning subagent-written files persist and can unintentionally influence later reasoning steps
+FilesystemBackend virtual_mode Misconception,Setting root_dir alone provides no isolation unless virtual_mode=True which is a common security footgun in production setups
+LocalShellBackend Security Boundary Collapse,Shell access bypasses all filesystem restrictions including virtual_mode making any path-based sandboxing ineffective
+StoreBackend Namespace Design,Incorrect namespace choice leads to silent multi-tenant data leakage since default behavior shares storage at assistant level
+Namespace Factory Hidden Context Sources,assistant_id and thread_id are not in runtime context and must be pulled via LangGraph config which is non-obvious and easy to miss
+files_update Semantics Constraint,Only in-state backends should populate files_update while external backends must return None to avoid inconsistent state reconciliation
+Create-only Write Contract,write must fail on existing files enforcing immutability semantics that prevent accidental overwrites but require explicit edit usage
+Edit Uniqueness Enforcement,edit requires old_string to match exactly once unless replace_all=True which introduces deterministic editing but can fail unexpectedly on duplicate substrings
+CompositeBackend Path Preservation,Aggregated results retain original path prefixes meaning downstream tools must handle heterogeneous storage transparently
+BackendFactory Runtime Dependency,Some backends must be passed as factories instead of instances because they depend on runtime state which affects initialization patterns
+Grep Error Handling Contract,Invalid regex must return error strings instead of raising exceptions ensuring tool-call stability under malformed inputs
+Virtual Filesystem Mapping Complexity,Custom backends must define deterministic mapping from absolute paths to storage keys which becomes non-trivial for hierarchical emulation over flat stores
+Policy Wrapper vs Subclass Tradeoff,Wrapper pattern provides backend-agnostic policy enforcement while subclassing ties logic to specific backend implementations reducing composability
+CompositeBackend Multi-Store Consistency,Routed backends operate independently so no transactional guarantees exist across paths leading to potential consistency anomalies in multi-write workflows
+Context Quarantine via Subagents,Delegating tool-heavy workflows to subagents prevents intermediate tool outputs from polluting the main agent's context window, effectively acting as a lossy compression boundary
+Subagent Non-Inheritance Model,Custom subagents do not inherit system_prompt tools middleware or skills from the parent forcing explicit configuration and preventing accidental capability leakage
+General-Purpose Subagent Override,Providing a subagent named "general-purpose" fully replaces the default fallback agent enabling control over default delegation behavior including model and tools
+Skill Isolation Semantics,Subagents with skills instantiate independent SkillsMiddleware instances with no bidirectional state sharing avoiding hidden cross-agent coupling
+Structured Output Non-Propagation,Validated structured outputs from subagents are not directly returned to the parent agent and must be manually embedded in ToolMessage for downstream use
+Model Specialization per Subagent,Assigning different models per subagent enables heterogeneous capability routing (e.g. long-context vs numerical reasoning) within a single agent system
+Context Propagation Invariance,Runtime context passed to the parent agent is automatically propagated unchanged to all subagents ensuring consistent access to shared state
+Namespaced Context Pattern,Per-subagent configuration requires either explicit schema fields or prefixed keys since context is globally shared across all subagents
+Tool Behavior via lc_agent_name,Tools can branch logic based on calling agent identity using lc_agent_name metadata enabling polymorphic behavior from shared tools
+Subagent as Context Boundary Tradeoff,Using subagents introduces loss of intermediate reasoning visibility making them unsuitable when step-by-step trace or state continuity is required
+Delegation Heuristic Sensitivity,Subagent selection depends heavily on description specificity making vague descriptions a primary failure mode in orchestration
+Filesystem Offloading Synergy,Combining subagents with filesystem storage enables large intermediate data handling without context inflation by externalizing raw outputs
+Synchronous Subagent Blocking Model,Default subagents execute synchronously blocking the parent agent which simplifies control flow but limits parallelism and responsiveness
+CompiledSubAgent Graph Constraint,Custom LangGraph-based subagents must expose a "messages" state key otherwise integration with Deep Agents runtime fails
+Subagent Tool Surface Minimization,Restricting tool sets per subagent reduces hallucination risk and improves routing precision by narrowing action space
+General-Purpose Subagent Skill Inheritance Exception,Unlike custom subagents the general-purpose subagent inherits parent skills creating asymmetry in capability distribution
+Streaming Trace Attribution via Metadata,Agent execution traces include lc_agent_name allowing post-hoc differentiation of subagent vs parent actions in observability pipelines
+Async Subagents Preview Status,Async subagents are a prerelease feature in deepagents 0.5.0 and explicitly not recommended for production so relying on them in deployed systems carries API and behavior instability risk
+Agent Protocol Dependency,Async subagents are not just local concurrency primitives but clients of any Agent Protocol server which makes protocol compatibility and deployment architecture part of the design surface
+Non-Blocking Delegation Model,Unlike sync subagents async subagents return a task ID immediately so orchestration logic must be designed around deferred result retrieval rather than direct composition
+Stateful Async Threads,Async subagents preserve their own thread state across updates and checks meaning they behave more like independently running agents than stateless delegated function calls
+Update-as-Interrupt Semantics,update_async_task does not append work onto the current run but interrupts the existing run and starts a new run on the same thread with full conversation history plus new instructions
+Task ID Equals Thread Identity,The returned task ID is effectively the server-side thread ID which matters for observability correlation lifecycle management and understanding why updates preserve history
+Dedicated async_tasks State Channel,Task tracking metadata is stored outside message history specifically to survive message compaction so storing task IDs only in tool messages would break long-running orchestration under summarization
+Terminal Status Cache Strategy,list_async_tasks fetches live status only for non-terminal tasks while serving success error and cancelled tasks from cache which reduces status-check overhead but creates different freshness guarantees by state
+ASGI vs HTTP Transport Boundary,Omitting url selects in-process ASGI transport while setting url forces remote HTTP transport so the same logical subagent abstraction hides materially different latency auth and deployment behavior
+Co-Deployment Registration Constraint,For ASGI transport in LangGraph deployments every graph must be registered in the same langgraph.json otherwise in-process routing cannot resolve the target graph_id
+graph_id Resolution Contract,graph_id must match a graph registered on the Agent Protocol server making it a deployment-time contract rather than a descriptive label and a common source of integration failure
+Worker Pool Concurrency Budget,Local worker provisioning must account for supervisor plus every active async subagent because each run consumes a worker slot and under-sizing silently converts concurrency into queueing
+Prompt-Level Anti-Polling Guardrail,The middleware injects rules to stop the supervisor from immediately calling check after launch because naive polling collapses the async model back into blocking behavior
+Stale Status Hazard,Conversation-history task statuses are considered stale by design so correct supervisors should re-check or list before reporting progress rather than trusting prior messages
+Task ID Integrity Requirement,Task IDs must be preserved exactly because truncation or abbreviation causes check cancel and update failures making ID formatting a real orchestration reliability issue
+Thread-ID Trace Correlation,In LangGraph deployments supervisor orchestration traces and subagent execution traces are linked by thread ID making that identifier the primary join key for debugging distributed agent behavior
+Hybrid Topology Pattern,Async subagents support mixed transport topologies where some agents are co-deployed and others remote enabling per-agent scaling and resource isolation without changing supervisor logic
+Middleware-Managed Run Lifecycle,The AsyncSubAgentMiddleware owns thread creation run management and state persistence so the supervisor sees simple tools while actual lifecycle complexity is hidden in middleware
+Interactive Steering Advantage,Async subagents are preferable when tasks need mid-flight instruction changes or cancellation because sync subagents cannot be steered once launched
+Checkpointer Requirement for HITL,Human approval in Deep Agents is stateful across pause and resume, so interrupts will not work correctly without a checkpointer persisting execution state between invocations
+Thread ID Continuity on Resume,Resuming after an interrupt is not just replaying input; it must use the exact same thread-scoped config so LangGraph can restore the suspended execution point instead of starting a fresh run
+interrupt_on Policy Granularity,Approval policy is defined per tool name, allowing different governance envelopes for destructive, communicative, and read-only operations rather than a single global human-review switch
+Default Interrupt Semantics,Setting a tool to True is shorthand for a full review surface with approve edit reject, which matters because it implicitly permits argument mutation unless you explicitly restrict decisions
+allowed_decisions as Risk Control Surface,The real security boundary is not merely whether a tool interrupts but which decisions are exposed, since removing edit or reject changes whether humans can constrain or only ratify agent intent
+Batched Interrupt Semantics,If multiple gated tools are proposed in one step, Deep Agents batch them into a single interrupt payload, so approval UIs and orchestration code must handle ordered multi-action review rather than one interrupt per tool
+Decision Ordering Contract,Resume decisions are positional and must align exactly with action_requests order, making ordering a correctness requirement because there is no safer keyed matching protocol in the resume API shown here
+review_configs Mapping Pattern,For multi-tool interrupts the practical pattern is to join action_requests with review_configs by action_name, since allowed decisions are delivered separately from each action payload
+Edit Decision Schema,An edit is not a partial patch; you must provide an edited_action including the tool name and a full args object, which is a production gotcha if you assume field-level diffs are merged automatically
+version="v2" Dependency,The examples consistently require invoke(..., version="v2"), which signals that interrupt handling semantics are version-sensitive and older invocation modes may not expose the same HITL behavior
+Subagent interrupt_on Override,Subagents can define their own interrupt policy for the same tool names, so governance is context-dependent and can be tightened inside specialized agents without changing the parent agent's defaults
+Tool-call Interrupts vs In-tool Interrupts,Deep Agents supports two distinct pause mechanisms: policy-driven interception before tool execution and direct interrupt() calls inside tool logic, which solve different control problems and can coexist
+interrupt() as Arbitrary Workflow Gate,Using interrupt() inside a tool is more general than interrupt_on because it can pause on semantic milestones within execution, not just at tool invocation boundaries
+Command Resume Shape Variance,Resume payload structure depends on interrupt type: tool-review interrupts expect Command(resume={"decisions": [...]}) while direct interrupt() resumes can pass arbitrary schema like {"approved": True}, so generic handlers must branch by interrupt contract
+CompiledSubAgent Approval Escalation,A compiled subagent can surface an interrupt through the parent agent invocation, meaning nested workflows preserve pause propagation instead of trapping human-review events inside the child agent
+HITL as Execution-Time Policy not Prompting,Approval control is enforced by runtime orchestration around tools rather than natural-language instructions to the model, which is materially more reliable for sensitive operations in production
+Approve-only Configuration,Restricting a tool to ["approve"] creates a one-way gate where humans can only release execution, useful for mandatory human signoff flows but dangerous if you expected an option to cancel at review time
+Risk-tiered Interrupt Design,The recommended production pattern is to map interrupt affordances to operational risk: high-risk tools allow full human intervention, medium-risk tools disable editing, and low-risk tools bypass review entirely to avoid needless latency
+Filesystem-backed Memory Injection,Memory is materialized as files loaded into system prompt at startup which creates prompt-size pressure and makes memory structure/design critical for token efficiency
+Backend Namespace as Isolation Primitive,Memory isolation is enforced purely via backend namespace (e.g. user_id vs assistant_id) rather than agent logic, making misconfiguration a major data leakage risk
+Hot-path Memory Writes Tradeoff,Writing memory during agent execution increases latency and cognitive load on the model since it must both solve tasks and curate memory simultaneously
+Background Consolidation Pattern,Decouples memory writing from interaction by using a second agent that performs summarization/merging, improving quality and latency but introducing staleness
+Consolidation Agent as ETL Layer,Acts like a data pipeline transforming raw conversation logs into structured long-term memory, enabling cross-session synthesis rather than incremental drift
+Thread Checkpoints as Episodic Memory Source,Episodic memory is not explicitly stored but reconstructed from persisted thread checkpoints, meaning retrieval cost scales with conversation history size
+Memory Retrieval via Prompt Injection Limitation,Default retrieval loads entire memory files into prompt instead of selective retrieval, which does not scale and requires manual structuring or external tools
+Skills Lazy Loading Mechanism,Procedural memory (skills) is not injected into prompt but loaded on demand, reducing token usage but requiring accurate triggering conditions
+Read-only Memory as Security Boundary,Shared memory must be enforced as read-only at backend level since agent-level safeguards are insufficient against prompt injection attacks
+Policy Hooks for Write Control,Write permissions are enforced at backend layer via policy hooks, not agent logic, which is critical for securing shared or sensitive memory paths
+Last-Write-Wins Conflict Model,Concurrent writes to the same memory file are non-transactional and resolved by overwrite, requiring architectural mitigation (file sharding or consolidation)
+Multitask Rollback for Scheduled Jobs,Using multitask_strategy="rollback" prevents stale background jobs from executing, ensuring memory consolidation operates only on latest conversation state
+Memory as Externalized Context Store,Deep Agents shift context scaling problem from prompt window to filesystem, effectively trading token limits for storage design complexity
+Assistant+User Composite Namespace Pattern,Combining assistant_id and user_id enables multi-tenant + multi-agent isolation, preventing cross-agent contamination in shared deployments
+Progressive Disclosure in Skills,Agent delays loading full skill contents until description match which reduces prompt bloat but creates dependency on high-quality metadata for correct activation
+Skill Matching via Description Only,Agent decides whether to use a skill solely from frontmatter description so vague or overloaded descriptions cause misfires or missed capability usage
+Skill File Size Limit Constraint,SKILL.md files over 10MB are silently skipped leading to non-obvious capability loss in production if not monitored
+Description Truncation Limit,Descriptions over 1024 characters are truncated which can remove critical routing signals and degrade skill selection accuracy
+Skill Source Precedence (Last-Wins),Later skill paths override earlier ones enabling layering but also introducing subtle bugs when duplicate skill names unintentionally shadow others
+Explicit Skill Loading Requirement,SDK does not auto-discover skills from standard directories so missing explicit paths results in agents silently lacking capabilities
+StateBackend File Injection Requirement,Skills must be injected via invoke(files=...) with structured file data not raw strings which is a non-obvious requirement that breaks naive implementations
+Skill Isolation in Subagents,Custom subagents do not inherit parent skills leading to fragmented capability graphs unless explicitly configured per subagent
+General vs Custom Subagent Skill Inheritance,Only implicitly created general-purpose subagents inherit skills while explicitly defined ones require manual skill wiring
+Skill-System Prompt Injection Mechanism,Skills are exposed via a structured system prompt section enabling a three-phase match-read-execute loop rather than direct tool invocation
+Skill as Context Compression Primitive,Skills act as a token-efficient alternative to large system prompts by externalizing heavy instructions until needed
+Skills vs Memory Loading Semantics,Skills are conditionally loaded while memory is always injected making skills preferable for large or infrequently used logic
+Filesystem Dependency for Skill Execution,Skills assume access to filesystem-backed tools so environments without filesystem access limit their utility
+Cross-Source Skill Layering Strategy,Ordered skill paths allow multi-level overrides (user vs project) but require careful ordering to avoid unintended precedence conflicts
+Skill Asset Discoverability Constraint,Non-SKILL.md assets must be explicitly referenced inside SKILL.md otherwise the agent will not utilize them despite availability
+BaseSandbox execute()-derived filesystem,Every filesystem primitive in sandbox backends is synthesized from execute(), so provider integration is thin but latency and shell semantics leak into read/write/edit behavior
+Conditional execute tool exposure,The harness checks SandboxBackendProtocol on each model call and strips execute if unsupported, which means tool availability is backend-dependent rather than statically fixed at agent construction
+Large-output spillover behavior,When execute output is too large it is redirected to a file and the agent is expected to switch to read_file, preventing context blowups but requiring agents to handle indirect output retrieval
+Two planes of file access,Agent file tools operate through in-sandbox execute while upload_files/download_files bypass shell via provider APIs, so confusing them causes wrong trust, performance, and lifecycle assumptions
+Sandbox as tool vs agent in sandbox,Running the agent outside the sandbox preserves keys and agent state while isolating execution, whereas running the agent inside the sandbox better mirrors local dev but couples deployment, communication, and secret exposure
+Assistant-scoped sandbox drift,Sharing one sandbox across assistant threads preserves repos and packages but creates state accretion and nondeterminism over time unless TTLs, snapshots, or cleanup are enforced
+Thread-to-sandbox identity mapping,Production chat apps should explicitly persist sandbox-to-thread binding rather than recreating environments ad hoc, otherwise follow-up turns lose filesystem and package continuity
+Sandbox isolation misconception,Sandboxes protect the host but not the agent from prompt or context injection, so arbitrary command execution inside the sandbox is still assumed possible under adversarial input
+Network exfiltration gap,Even fully isolated filesystems remain vulnerable if outbound network is open because a compromised agent can exfiltrate sandbox-readable data over HTTP or DNS
+Secrets-outside-sandbox pattern,The recommended security architecture is authenticated host-side tools rather than injecting credentials into the sandbox, because once a secret is visible to the agent it is effectively visible to an attacker
+Proxy-based credential injection,A safer future-facing model is outbound request interception that attaches secrets outside the agent's visibility, separating API auth from LLM-accessible context without exposing raw credentials
+HITL insufficiency for secret injection,Human approval on tool calls is only a weak mitigation once secrets exist in-sandbox because creative context injection can route around output review and still leak credentials
+Sandbox output trust boundary,Everything produced inside the sandbox should be treated as untrusted input to the host application, which matters when chaining sandbox outputs into downstream automation or privileged systems
+Provider capability asymmetry,Providers expose different lifecycle knobs such as TTL, metadata labels, or network blocking, so backend choice changes operational architecture rather than just execution substrate
+Resource-lifecycle cost coupling,Sandbox scope is not just a UX choice but a cost and reliability control surface since idle sandboxes continue consuming money and accumulating mutable state until explicitly terminated or TTL-cleaned
+Subgraph streaming namespace semantics,Namespaces encode agent hierarchy as a path of node names and task IDs so UIs can route events per spawned subagent instead of treating all streams as a flat channel
+tools: vs tool_call_id mismatch,The subagent runtime namespace ID from tools:<pregel_id> is not the same as the original task tool_call_id so production lifecycle tracking usually has to correlate them indirectly through first subagent event and final tool message
+v2 StreamPart contract,In v2 every stream chunk has stable keys type ns and data across all modes which removes legacy tuple-shape branching and makes multi-mode plus subgraph handlers much easier to write correctly
+Mixed-mode stream interleaving,When combining updates messages and custom modes you must handle output interleaving explicitly or token rendering will collide with progress events and produce broken terminal or UI state
+messages mode as tool telemetry channel,In Deep Agents tool call chunks and tool results surface through messages mode so a token stream consumer can also build real-time tool traces without separately subscribing to another channel
+Incremental tool-call arg streaming,Tool invocation args arrive in chunks rather than as a single finalized payload so any inspector UI or logger must append fragments incrementally instead of assuming complete JSON on first event
+Subgraph event detection by namespace prefix,The robust way to classify subagent-originated events is checking namespace segments for tools: prefixes rather than relying on node names because node names like model_request appear in both main and subagent graphs
+Custom progress from inside tools,get_stream_writer lets tool code emit arbitrary progress events into the stream which is the practical mechanism for long-running operations where model-token streaming alone gives poor observability
+Meaningful-node filtering,updates mode can include internal or middleware steps so production dashboards often whitelist semantically relevant nodes like model_request and tools to avoid noisy or misleading progress displays
+Main-agent tools node as subagent completion boundary,A subagent is operationally complete only when its result re-enters the parent graph as a tool message on the main agent tools node not merely when the subagent stops emitting its own events
+Subgraph streaming opt-in,Subagent events are not surfaced unless subgraphs=True is enabled during streaming so missing child telemetry is often a configuration error rather than a scheduling or execution bug
+Stable source switching for token UIs,Streaming tokens from multiple agents requires source-aware buffering or header switching because consecutive chunks may alternate between main and subagents and otherwise yield unreadable blended output

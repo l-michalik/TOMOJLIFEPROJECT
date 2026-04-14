@@ -230,6 +230,18 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertIn("STEP-7", response.state.aggregation.blocked_step_ids)
         self.assertEqual(response.state.aggregation.next_decision, "await_user_approval")
         self.assertTrue(response.state.aggregation.has_partial_result)
+        self.assertIsNotNone(response.final_report)
+        self.assertEqual(response.final_report.final_status, "waiting_for_approval")
+        self.assertEqual(
+            response.final_report.approval_required_actions,
+            ["STEP-4-ACTION-1"],
+        )
+        self.assertEqual(
+            response.final_report.user_decisions_required,
+            ["Approve or reject actions: STEP-4-ACTION-1."],
+        )
+        self.assertIn("Task report for `req-105`", response.answer)
+        self.assertIn("Approval-required actions:", response.answer)
 
     def test_supervisor_resumes_after_approval_without_rerunning_completed_steps(self) -> None:
         task_request = TaskRequest.model_validate(
@@ -291,6 +303,12 @@ class TaskRequestParsingTests(unittest.TestCase):
             "platform-lead",
         )
         self.assertGreaterEqual(len(resumed_response.state.decision_history), 6)
+        self.assertIsNotNone(resumed_response.final_report)
+        self.assertEqual(resumed_response.final_report.final_status, "completed")
+        self.assertEqual(resumed_response.final_report.approval_required_actions, [])
+        self.assertEqual(resumed_response.final_report.user_decisions_required, [])
+        self.assertIn("Final status: completed", resumed_response.answer)
+        self.assertIn("Subagent results:", resumed_response.answer)
 
 if __name__ == "__main__":
     unittest.main()

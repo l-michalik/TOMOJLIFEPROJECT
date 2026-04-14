@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from contracts.final_report import WorkflowFinalReport
 from contracts.task_request import ClarificationItem, RequestSource, TaskRequest
 from contracts.workflow_aggregation import WorkflowAggregationSummary
 
@@ -157,6 +158,7 @@ class TaskResponse(BaseModel):
     confidence: float | None = None
     risk_flags: list[str] = Field(default_factory=list)
     requires_user_approval: bool = False
+    final_report: WorkflowFinalReport | None = None
     answer: str | None = None
 
     @classmethod

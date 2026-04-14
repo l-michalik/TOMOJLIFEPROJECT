@@ -20,6 +20,7 @@ from utils.supervisor import (
 from utils.workflow_checkpointing import get_workflow_checkpoint_store
 from utils.workflow_logging import get_application_logger, log_ai_request
 from utils.workflow_delegation import delegate_workflow_plan
+from utils.workflow_final_report import attach_final_report
 from utils.workflow_plan_builder import build_workflow_plan
 from utils.workflow_risk import assess_workflow_risk, build_workflow_confidence
 from utils.workflow_state import (
@@ -92,6 +93,7 @@ def run_supervisor_agent(
         requires_user_approval=planned_output["requires_user_approval"],
         delegation_result=None,
     )
+    attach_final_report(task_request=task_request, response=response)
     checkpoint_store.save(
         request_id=task_request.request_id,
         task_request=task_request,
@@ -122,6 +124,7 @@ def resume_supervisor_workflow(
         response=persisted_response,
         approval_request=approval_request,
     )
+    attach_final_report(task_request=task_request, response=response)
     checkpoint_store.save(
         request_id=request_id,
         task_request=task_request,
@@ -181,6 +184,7 @@ def persist_workflow_progress(
         new_status=delegation_result["lifecycle_status"],
         related_step_id=delegation_result["last_completed_step_id"],
     )
+    attach_final_report(task_request=task_request, response=response)
     checkpoint_store.save(
         request_id=task_request.request_id,
         task_request=task_request,

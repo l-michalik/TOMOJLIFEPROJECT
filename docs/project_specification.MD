@@ -312,23 +312,125 @@ Po zakończeniu wykonania przez `Execution Agent`, Supervisor zbiera wyniki koń
 
 ### 10.1 DeploymentAgent
 
-- odpowiada za zadania wdrożeniowe,
-- analizuje wymagane kroki deploymentu,
-- zwraca plan działań, warunki wstępne, wynik analizy i logi,
-- nie podejmuje decyzji politycznych.
+`DeploymentAgent` odpowiada wyłącznie za analizę i przygotowanie zadań wdrożeniowych dotyczących aplikacji i usług.
+
+Zakres odpowiedzialności:
+
+- rollout aplikacji i usług,
+- release sequencing i kolejność wdrożeń zależnych komponentów,
+- strategia wdrożenia typu rolling, blue/green lub canary, jeżeli wynika to z kontekstu zadania,
+- plan rollbacku i warunki bezpiecznego wycofania wersji,
+- wymagania dotyczące dostępności usługi podczas wdrożenia,
+- walidacja gotowości artefaktu do wdrożenia z perspektywy deploymentu.
+
+Typy obsługiwanych zadań:
+
+- deploy nowej wersji usługi,
+- restart lub redeploy komponentu aplikacyjnego,
+- rollout hotfixa,
+- promotion release między środowiskami,
+- przygotowanie kolejności wdrożenia dla wielu usług.
+
+Granice decyzyjne:
+
+- może proponować kroki deploymentu, zależności i warunki wstępne,
+- może wskazać potrzebę rollbacku, smoke testów lub okna wdrożeniowego,
+- nie wykonuje zmian samodzielnie,
+- nie podejmuje decyzji politycznych ani autoryzacyjnych,
+- nie zmienia konfiguracji infrastruktury, chyba że jedynie wskazuje zależność do przekazania `InfraAgent`,
+- nie uruchamia pipeline ani narzędzi wykonawczych z pominięciem `Execution Agent`.
+
+Relacje:
+
+- przyjmuje podzadanie wyłącznie od `Supervisor`,
+- zwraca analizę, rekomendacje, logi i proponowane akcje wyłącznie do `Supervisor`,
+- jego propozycje są oceniane przez `Risk/Policy Agent`,
+- wykonanie zaproponowanych akcji może nastąpić wyłącznie przez `Execution Agent`.
 
 ### 10.2 InfraAgent
 
-- odpowiada za zadania infrastrukturalne,
-- analizuje wpływ zmian na zasoby i konfiguracje,
-- zwraca propozycje akcji infrastrukturalnych, zależności i ryzyka techniczne,
-- nie omija bramek autoryzacji.
+`InfraAgent` odpowiada wyłącznie za analizę i przygotowanie zmian infrastrukturalnych, środowiskowych oraz konfiguracyjnych.
+
+Zakres odpowiedzialności:
+
+- zasoby chmurowe i platformowe,
+- konfiguracja środowisk,
+- zależności sieciowe, storage, compute i IAM wynikające ze zgłoszenia,
+- sekrety, zmienne środowiskowe i konfiguracja platformowa na poziomie planowania,
+- wpływ zmian na współdzielone komponenty infrastrukturalne,
+- identyfikacja prerekwizytów dla deploymentu i pipeline.
+
+Typy obsługiwanych zadań:
+
+- utworzenie lub modyfikacja zasobów infrastrukturalnych,
+- zmiana konfiguracji środowiska,
+- aktualizacja secretów lub parametrów runtime,
+- analiza zależności sieciowych, uprawnień i storage,
+- przygotowanie zmian wymaganych przed wdrożeniem aplikacji.
+
+Granice decyzyjne:
+
+- może identyfikować wpływ techniczny, zależności i ryzyka infrastrukturalne,
+- może proponować akcje typu `infra_change`, `config_update`, `secret_rotation` lub `permission_change`,
+- nie zatwierdza ryzyka i nie klasyfikuje zgodności z polityką,
+- nie wykonuje komend administracyjnych ani zmian środowiskowych,
+- nie przejmuje zadań rolloutowych należących do `DeploymentAgent`,
+- nie zmienia pipeline'ów należących do `CI_CD_Agent`.
+
+Relacje:
+
+- dostaje zakres prac od `Supervisor`,
+- przekazuje wynik analizy tylko do `Supervisor`,
+- jego propozycje trafiają do `Risk/Policy Agent` przed jakimkolwiek wykonaniem,
+- zatwierdzone akcje są realizowane wyłącznie przez `Execution Agent`.
 
 ### 10.3 CI_CD_Agent
 
-- odpowiada za pipeline, build, testy i release flow,
-- przygotowuje kroki związane z walidacją jakości i wdrożeniem artefaktów,
-- zwraca status oraz rekomendowane akcje dla wykonania.
+`CI_CD_Agent` odpowiada wyłącznie za analizę i przygotowanie zadań dotyczących pipeline'ów, buildów, testów, artefaktów i release flow.
+
+Zakres odpowiedzialności:
+
+- workflow build i test,
+- gating jakościowy przed wdrożeniem,
+- artefakty release i ich gotowość,
+- konfiguracja pipeline oraz release automation,
+- zależności między walidacją jakości a deploymentem,
+- rekomendacje dotyczące kolejności build, test, publish i release.
+
+Typy obsługiwanych zadań:
+
+- zmiana pipeline CI lub CD,
+- wymaganie dodatkowych testów lub walidacji quality gates,
+- analiza przepływu artefaktów,
+- przygotowanie release flow,
+- diagnostyka problemów w buildach, testach i automatyzacji dostarczania.
+
+Granice decyzyjne:
+
+- może rekomendować akcje dotyczące pipeline, testów, release i artefaktów,
+- może wskazywać brakujące walidacje lub wymagane quality gates,
+- nie wykonuje pipeline'ów i nie uruchamia buildów samodzielnie,
+- nie zatwierdza wyjątków od polityk,
+- nie przejmuje odpowiedzialności za zmiany infrastrukturalne ani rollout aplikacji,
+- nie omija `Risk/Policy Agent` ani `Execution Agent`.
+
+Relacje:
+
+- pracuje wyłącznie na podstawie delegacji od `Supervisor`,
+- zwraca wynik tylko do `Supervisor`,
+- planowane akcje są przekazywane przez `Supervisor` do `Risk/Policy Agent`,
+- działania dopuszczone do wykonania realizuje tylko `Execution Agent`.
+
+### 10.4 Wspólne reguły dla agentów specjalistycznych
+
+Każdy agent specjalistyczny:
+
+- realizuje wyłącznie swoją klasę zadań,
+- nie podejmuje samodzielnej orkiestracji całego workflow,
+- nie wywołuje narzędzi wykonawczych bezpośrednio,
+- nie omija polityk bezpieczeństwa, approval gate ani sandboxingu,
+- zwraca wynik, logi, rekomendacje i proponowane akcje do `Supervisor`,
+- może wskazać zależność na innego agenta, ale nie deleguje pracy poza kontrolą `Supervisor`.
 
 ## 11. Specyfikacja Risk/Policy Agent
 

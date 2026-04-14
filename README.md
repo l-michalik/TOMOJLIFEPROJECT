@@ -130,6 +130,8 @@ Legacy payload fields `task_description`, `parameters`, and `context` are still 
 
 Detailed contract description is available in `docs/supervisor_input_format.md`.
 
+The target specialist-agent split and responsibility boundaries are documented in `docs/specialist_agent_boundaries.md`.
+
 ## Structure
 
 - `api/app.py` - FastAPI application and routes

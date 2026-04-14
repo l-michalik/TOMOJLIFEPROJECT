@@ -19,6 +19,7 @@ from contracts.task_response import (
 )
 from settings.supervisor import get_openai_model
 from utils.supervisor import read_last_message_text
+from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 from utils.workflow_policy import (
     apply_policy_decision_states,
     build_fallback_step_response as build_policy_fallback_step_response,
@@ -36,6 +37,7 @@ StepRunner = Callable[
     dict[str, Any],
 ]
 CheckpointCallback = Callable[[dict[str, Any]], None]
+logger = get_application_logger("utils.workflow_delegation")
 
 
 def delegate_workflow_plan(
@@ -348,18 +350,36 @@ def run_specialist_step(
     if not os.getenv("OPENAI_API_KEY"):
         return build_fallback_step_response(step, task_request, dependency_results)
 
-    agent = create_deep_agent(
-        model=get_openai_model(explicit_model=model),
-        system_prompt=build_step_system_prompt(step.owner_agent),
-        name=build_step_agent_name(step.owner_agent),
-    )
     prompt = build_step_prompt(
         step=step,
         task_request=task_request,
         dependency_results=dependency_results,
     )
+    log_ai_request(
+        logger,
+        request_id=task_request.request_id,
+        model=model,
+        prompt=prompt,
+        agent_name=step.owner_agent.value,
+        step_id=step.step_id,
+        generic_prompt=build_step_request_log_summary(step.owner_agent),
+    )
+    agent = create_deep_agent(
+        model=get_openai_model(explicit_model=model),
+        system_prompt=build_step_system_prompt(step.owner_agent),
+        name=build_step_agent_name(step.owner_agent),
+    )
     result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
     raw_text = read_last_message_text(result)
+    log_ai_response(
+        logger,
+        request_id=task_request.request_id,
+        model=model,
+        response_text=raw_text,
+        agent_name=step.owner_agent.value,
+        step_id=step.step_id,
+        generic_response=build_step_response_log_summary(step.owner_agent),
+    )
     try:
         return json.loads(raw_text)
     except json.JSONDecodeError:
@@ -371,6 +391,30 @@ def build_step_system_prompt(owner_agent: SpecialistAgentName) -> str:
         f"You are {owner_agent.value}. "
         "Return only valid JSON with keys result, logs, and status."
     )
+
+
+def build_step_request_log_summary(owner_agent: SpecialistAgentName) -> str:
+    summaries = {
+        SpecialistAgentName.DEPLOYMENT_AGENT: "Analyze the deployment plan and release actions.",
+        SpecialistAgentName.INFRA_AGENT: "Analyze infrastructure dependencies and required changes.",
+        SpecialistAgentName.CI_CD_AGENT: "Analyze the CI/CD pipeline and release flow requirements.",
+        SpecialistAgentName.RISK_POLICY_AGENT: "Review proposed actions for policy and approval requirements.",
+        SpecialistAgentName.EXECUTION_AGENT: "Prepare the execution handoff for approved actions.",
+        SpecialistAgentName.HUMAN_REVIEW_INTERFACE: "Prepare the human approval checkpoint details.",
+    }
+    return summaries.get(owner_agent, "Execute the assigned workflow step.")
+
+
+def build_step_response_log_summary(owner_agent: SpecialistAgentName) -> str:
+    summaries = {
+        SpecialistAgentName.DEPLOYMENT_AGENT: "Deployment analysis result received.",
+        SpecialistAgentName.INFRA_AGENT: "Infrastructure analysis result received.",
+        SpecialistAgentName.CI_CD_AGENT: "CI/CD analysis result received.",
+        SpecialistAgentName.RISK_POLICY_AGENT: "Risk and policy review result received.",
+        SpecialistAgentName.EXECUTION_AGENT: "Execution handoff result received.",
+        SpecialistAgentName.HUMAN_REVIEW_INTERFACE: "Human review checkpoint result received.",
+    }
+    return summaries.get(owner_agent, "Agent returned the workflow step result.")
 
 
 def build_step_agent_name(owner_agent: SpecialistAgentName) -> str:

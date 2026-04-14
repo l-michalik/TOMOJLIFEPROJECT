@@ -1,2 +1,2 @@
-"""Agenci projektu."""
+"""Project Agents."""
 

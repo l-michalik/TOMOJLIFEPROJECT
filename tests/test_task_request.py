@@ -234,14 +234,26 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(response.final_report.final_status, "waiting_for_approval")
         self.assertEqual(
             response.final_report.approval_required_actions,
-            ["STEP-4-ACTION-1"],
+            [
+                "STEP-1-ACTION-1",
+                "STEP-2-ACTION-1",
+                "STEP-3-ACTION-1",
+                "STEP-4-ACTION-1",
+            ],
         )
         self.assertEqual(
             response.final_report.user_decisions_required,
-            ["Approve or reject actions: STEP-4-ACTION-1."],
+            [
+                "Approve or reject actions: STEP-1-ACTION-1, STEP-2-ACTION-1, "
+                "STEP-3-ACTION-1, STEP-4-ACTION-1."
+            ],
         )
-        self.assertIn("Task report for `req-105`", response.answer)
-        self.assertIn("Approval-required actions:", response.answer)
+        self.assertIn("Task `req-105` is `waiting_for_approval`.", response.answer)
+        self.assertIn(
+            "Action needed: Approve or reject actions: STEP-1-ACTION-1, STEP-2-ACTION-1, "
+            "STEP-3-ACTION-1, STEP-4-ACTION-1.",
+            response.answer,
+        )
 
     def test_supervisor_resumes_after_approval_without_rerunning_completed_steps(self) -> None:
         task_request = TaskRequest.model_validate(
@@ -307,8 +319,8 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(resumed_response.final_report.final_status, "completed")
         self.assertEqual(resumed_response.final_report.approval_required_actions, [])
         self.assertEqual(resumed_response.final_report.user_decisions_required, [])
-        self.assertIn("Final status: completed", resumed_response.answer)
-        self.assertIn("Subagent results:", resumed_response.answer)
+        self.assertIn("Task `req-112` is `completed`.", resumed_response.answer)
+        self.assertIn("Executed steps: 8 total, 8 completed.", resumed_response.answer)
 
 if __name__ == "__main__":
     unittest.main()

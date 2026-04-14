@@ -18,7 +18,7 @@ from utils.supervisor import (
     sort_plan_steps,
 )
 from utils.workflow_checkpointing import get_workflow_checkpoint_store
-from utils.workflow_logging import get_application_logger, log_ai_request
+from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 from utils.workflow_delegation import delegate_workflow_plan
 from utils.workflow_final_report import attach_final_report
 from utils.workflow_plan_builder import build_workflow_plan
@@ -222,6 +222,7 @@ def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
         request_id=task_request.request_id,
         model=model,
         prompt=prompt,
+        generic_prompt="Prepare a Supervisor planning response for the DevOps task below.",
     )
     agent = create_supervisor_agent(model=model)
     result = agent.invoke(
@@ -236,6 +237,13 @@ def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
     )
 
     raw_text = read_last_message_text(result=result)
+    log_ai_response(
+        logger,
+        request_id=task_request.request_id,
+        model=model,
+        response_text=raw_text,
+        generic_response="Supervisor returned a planning response.",
+    )
     try:
         planned_output = parse_planned_supervisor_output(raw_text=raw_text)
     except Exception:

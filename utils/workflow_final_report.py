@@ -27,7 +27,7 @@ def attach_final_report(
 ) -> TaskResponse:
     report = build_workflow_final_report(task_request=task_request, response=response)
     response.final_report = report
-    response.answer = report.publication_message
+    response.answer = build_brief_answer(report)
     return response
 
 
@@ -39,7 +39,7 @@ def build_workflow_final_report(
     plan_steps = response.state.plan_steps if response.state else []
     policy_decisions = collect_policy_decisions(build_policy_dependency_results(plan_steps))
     blocked_actions = extract_blocked_actions(policy_decisions)
-    approval_required_actions = extract_approval_required_actions(policy_decisions)
+    approval_required_actions = collect_pending_approval_actions(plan_steps)
     artifact_references = collect_artifact_references(plan_steps)
 
     report = WorkflowFinalReport(
@@ -219,6 +219,30 @@ def build_policy_dependency_results(
     }
 
 
+def collect_pending_approval_actions(step_states: list[WorkflowStepState]) -> list[str]:
+    pending_actions: list[str] = []
+    has_waiting_approval_step = False
+    for step in step_states:
+        if step.status != WorkflowStepStatus.WAITING_FOR_APPROVAL:
+            continue
+        has_waiting_approval_step = True
+        if not isinstance(step.response, dict):
+            continue
+        raw_actions = step.response.get("approval_required_actions")
+        if not isinstance(raw_actions, list):
+            continue
+        pending_actions.extend(str(action) for action in raw_actions)
+    if pending_actions:
+        return deduplicate_preserving_order(pending_actions)
+    if not has_waiting_approval_step:
+        return []
+    return extract_approval_required_actions(build_pending_policy_decisions(step_states))
+
+
+def build_pending_policy_decisions(step_states: list[WorkflowStepState]) -> list[dict[str, Any]]:
+    return collect_policy_decisions(build_policy_dependency_results(step_states))
+
+
 def deduplicate_preserving_order(values: list[str]) -> list[str]:
     unique_values: list[str] = []
     seen_values: set[str] = set()
@@ -284,6 +308,23 @@ def render_publication_message(report: WorkflowFinalReport) -> str:
             [f"- {reference}" for reference in report.artifact_references],
         )
     )
+    return "\n".join(lines)
+
+
+def build_brief_answer(report: WorkflowFinalReport) -> str:
+    lines = [
+        f"Task `{report.request_id}` is `{report.final_status}`.",
+        f"Goal: {report.task_goal_summary}",
+    ]
+    if report.user_decisions_required:
+        lines.append(f"Action needed: {report.user_decisions_required[0]}")
+    elif report.errors:
+        lines.append(f"Primary issue: {report.errors[0]}")
+    elif report.executed_steps:
+        completed_steps = sum(1 for step in report.executed_steps if step.status == "completed")
+        lines.append(
+            f"Executed steps: {len(report.executed_steps)} total, {completed_steps} completed."
+        )
     return "\n".join(lines)
 
 

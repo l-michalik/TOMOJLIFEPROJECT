@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
+from utils.task_request_parser import build_standardized_work_item
+
 
 class RequestSource(str, Enum):
     JIRA = "jira"
@@ -30,6 +32,19 @@ class InputStatus(str, Enum):
 class ClarificationItem(BaseModel):
     field_name: str
     reason: str
+
+
+class OperationType(str, Enum):
+    DEPLOY = "deploy"
+    ROLLBACK = "rollback"
+    RESTART = "restart"
+    SCALE = "scale"
+    CONFIGURE = "configure"
+    DIAGNOSE = "diagnose"
+    PIPELINE = "pipeline"
+    BUILD = "build"
+    TEST = "test"
+    RELEASE = "release"
 
 
 class TaskParams(BaseModel):
@@ -83,6 +98,16 @@ class TaskRequest(BaseModel):
 
     @computed_field
     @property
+    def standardized_work_item(self) -> "StandardizedWorkItem":
+        parsed_work_item = build_standardized_work_item(
+            user_request=self.user_request,
+            execution_options=self.params.execution_options,
+            declared_environment=enum_value_or_none(self.params.target_environment),
+        )
+        return StandardizedWorkItem.model_validate(parsed_work_item)
+
+    @computed_field
+    @property
     def clarification_items(self) -> list[ClarificationItem]:
         missing_fields: list[ClarificationItem] = []
 
@@ -110,11 +135,11 @@ class TaskRequest(BaseModel):
                 )
             )
 
-        if self.params.target_environment is None:
+        if self.standardized_work_item.target_environment is None:
             missing_fields.append(
                 ClarificationItem(
-                    field_name="params.target_environment",
-                    reason="Środowisko docelowe jest wymagane przed planowaniem.",
+                    field_name="standardized_work_item.target_environment",
+                    reason="Środowisko docelowe musi zostać wskazane w parametrach lub treści zgłoszenia.",
                 )
             )
 
@@ -123,6 +148,22 @@ class TaskRequest(BaseModel):
                 ClarificationItem(
                     field_name="params.priority",
                     reason="Priorytet jest wymagany do klasyfikacji zgłoszenia.",
+                )
+            )
+
+        if self.standardized_work_item.service_name is None:
+            missing_fields.append(
+                ClarificationItem(
+                    field_name="standardized_work_item.service_name",
+                    reason="Nazwa usługi musi zostać wskazana przed planowaniem workflow.",
+                )
+            )
+
+        if self.standardized_work_item.operation_type is None:
+            missing_fields.append(
+                ClarificationItem(
+                    field_name="standardized_work_item.operation_type",
+                    reason="Typ operacji musi zostać wskazany lub wynikać z treści zgłoszenia.",
                 )
             )
 
@@ -142,7 +183,7 @@ class TaskRequest(BaseModel):
                 )
             )
 
-        return missing_fields
+        return deduplicate_clarification_items(missing_fields)
 
     @computed_field
     @property
@@ -159,6 +200,14 @@ class TaskRequest(BaseModel):
             f"user_id: {self.user_id}\n"
             f"user_request: {self.user_request}\n"
             f"input_status: {self.input_status.value}\n"
+            f"standardized_work_item.service_name: {self.standardized_work_item.service_name}\n"
+            "standardized_work_item.target_environment: "
+            f"{enum_value_or_none(self.standardized_work_item.target_environment)}\n"
+            "standardized_work_item.operation_type: "
+            f"{enum_value_or_none(self.standardized_work_item.operation_type)}\n"
+            "standardized_work_item.execution_parameters: "
+            f"{self.standardized_work_item.execution_parameters}\n"
+            f"standardized_work_item.constraints: {self.standardized_work_item.constraints}\n"
             f"params.target_environment: {enum_value_or_none(self.params.target_environment)}\n"
             f"params.priority: {enum_value_or_none(self.params.priority)}\n"
             f"params.ticket_id: {self.params.ticket_id}\n"
@@ -187,6 +236,14 @@ class TaskRequest(BaseModel):
         )
 
 
+class StandardizedWorkItem(BaseModel):
+    service_name: str | None = None
+    target_environment: TargetEnvironment | None = None
+    operation_type: OperationType | None = None
+    execution_parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: list[str] = Field(default_factory=list)
+
+
 def normalize_optional_text(value: str | None) -> str | None:
     if value is None:
         return None
@@ -198,3 +255,18 @@ def enum_value_or_none(value: Enum | None) -> str | None:
     if value is None:
         return None
     return str(value.value)
+
+
+def deduplicate_clarification_items(
+    clarification_items: list[ClarificationItem],
+) -> list[ClarificationItem]:
+    unique_items: list[ClarificationItem] = []
+    seen_fields: set[str] = set()
+
+    for item in clarification_items:
+        if item.field_name in seen_fields:
+            continue
+        seen_fields.add(item.field_name)
+        unique_items.append(item)
+
+    return unique_items

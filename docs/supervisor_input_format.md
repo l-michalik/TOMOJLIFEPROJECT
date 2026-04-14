@@ -8,6 +8,7 @@ Kontrakt wejściowy:
 
 - normalizuje zgłoszenia z Jira, chatu i API do jednego formatu,
 - rozdziela treść zgłoszenia od parametrów wykonania,
+- buduje ustandaryzowany obiekt roboczy na podstawie treści zgłoszenia i parametrów integracyjnych,
 - pozwala odróżnić błąd schematu od zgłoszenia wymagającego doprecyzowania,
 - daje Supervisorowi komplet danych potrzebnych do walidacji, audytu i planowania.
 
@@ -71,10 +72,38 @@ Za wymagające doprecyzowania uznawane są następujące przypadki:
 - brak `request_id`,
 - brak `user_id`,
 - brak `user_request`,
-- brak `params.target_environment`,
+- brak `standardized_work_item.target_environment`,
 - brak `params.priority`,
+- brak `standardized_work_item.service_name`,
+- brak `standardized_work_item.operation_type`,
 - `source=jira` bez `params.ticket_id`,
 - `source=chat` bez `params.conversation_id`.
+
+## Ustandaryzowany obiekt roboczy
+
+Na etapie wejściowym Supervisor buduje dodatkowy obiekt `standardized_work_item`, który trafia do `normalized_request` i stanowi podstawę do dalszego planowania.
+
+```json
+{
+  "service_name": "billing-api",
+  "target_environment": "stage",
+  "operation_type": "deploy",
+  "execution_parameters": {
+    "service_name": "billing-api",
+    "target_environment": "stage",
+    "release_version": "2026.04.14"
+  },
+  "constraints": ["no_downtime"]
+}
+```
+
+Zasady budowy:
+
+- `service_name` jest pobierane najpierw z `params.execution_options`, a jeśli go tam nie ma, z treści `user_request`,
+- `target_environment` jest pobierane z `params.target_environment`, z parametrów integracyjnych albo z treści zgłoszenia,
+- `operation_type` jest określane na podstawie słów kluczowych w zgłoszeniu lub jawnego parametru operacji,
+- `execution_parameters` zawiera znormalizowane parametry wykonania przekazane przez integrację i parametry wywnioskowane z treści,
+- `constraints` zawiera ograniczenia jawnie przekazane przez integrację lub rozpoznane w treści zgłoszenia.
 
 ## Obsługa braków danych
 
@@ -94,8 +123,8 @@ Przykładowa odpowiedź:
   "status": "needs_clarification",
   "validation_errors": [
     {
-      "field_name": "params.target_environment",
-      "reason": "Środowisko docelowe jest wymagane przed planowaniem."
+      "field_name": "standardized_work_item.target_environment",
+      "reason": "Środowisko docelowe musi zostać wskazane w parametrach lub treści zgłoszenia."
     }
   ],
   "normalized_request": {
@@ -110,10 +139,19 @@ Przykładowa odpowiedź:
       "conversation_id": "conv-42",
       "execution_options": {}
     },
+    "standardized_work_item": {
+      "service_name": "billing-api",
+      "target_environment": null,
+      "operation_type": "deploy",
+      "execution_parameters": {
+        "service_name": "billing-api"
+      },
+      "constraints": []
+    },
     "clarification_items": [
       {
-        "field_name": "params.target_environment",
-        "reason": "Środowisko docelowe jest wymagane przed planowaniem."
+        "field_name": "standardized_work_item.target_environment",
+        "reason": "Środowisko docelowe musi zostać wskazane w parametrach lub treści zgłoszenia."
       }
     ],
     "input_status": "needs_clarification"
@@ -145,6 +183,16 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
       "execution_options": {
         "service_name": "billing-api"
       }
+    },
+    "standardized_work_item": {
+      "service_name": "billing-api",
+      "target_environment": "stage",
+      "operation_type": "deploy",
+      "execution_parameters": {
+        "service_name": "billing-api",
+        "target_environment": "stage"
+      },
+      "constraints": []
     },
     "clarification_items": [],
     "input_status": "ready_for_planning"

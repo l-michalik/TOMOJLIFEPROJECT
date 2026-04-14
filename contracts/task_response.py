@@ -5,6 +5,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from contracts.agent_input import AgentTaskType
+from contracts.agent_output import (
+    AgentAnalysisDetail,
+    AgentArtifactReference,
+    AgentTechnicalError,
+    SupervisorAggregationPayload,
+)
 from contracts.final_report import WorkflowFinalReport
 from contracts.task_request import ClarificationItem, RequestSource, TaskRequest
 from contracts.workflow_aggregation import WorkflowAggregationSummary
@@ -96,6 +102,14 @@ class WorkflowStepState(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     response: dict[str, Any] | None = None
     logs: list[str] = Field(default_factory=list)
+    analysis_details: list[AgentAnalysisDetail] = Field(default_factory=list)
+    recommended_actions: list[dict[str, Any]] = Field(default_factory=list)
+    artifacts: list[AgentArtifactReference] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    technical_errors: list[AgentTechnicalError] = Field(default_factory=list)
+    supervisor_data: SupervisorAggregationPayload = Field(
+        default_factory=SupervisorAggregationPayload
+    )
     execution_details: dict[str, Any] = Field(default_factory=dict)
     error_details: dict[str, Any] | None = None
     status_reason: str | None = None

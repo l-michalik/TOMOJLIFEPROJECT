@@ -3,6 +3,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from contracts.agent_output import AgentArtifactReference, AgentTechnicalError, SupervisorAggregationPayload
+
+
 class AggregatedExecutionStatus(str, Enum):
     SUCCESS = "success"
     ERROR = "error"
@@ -22,6 +25,12 @@ class AggregatedStepResult(BaseModel):
     execution_status: AggregatedExecutionStatus
     result: dict[str, Any] | None = None
     logs: list[str] = Field(default_factory=list)
+    artifacts: list[AgentArtifactReference] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    technical_errors: list[AgentTechnicalError] = Field(default_factory=list)
+    supervisor_data: SupervisorAggregationPayload = Field(
+        default_factory=SupervisorAggregationPayload
+    )
     execution_details: dict[str, Any] = Field(default_factory=dict)
     error: StepErrorDetails | None = None
     is_problematic: bool = False

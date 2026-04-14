@@ -102,7 +102,7 @@ def build_specialist_results(
             step_id=step.step_id,
             status=step.status.value,
             summary=extract_step_summary(step),
-            artifacts=collect_step_artifacts(step.response),
+            artifacts=collect_step_artifacts(step),
             logs=step.logs,
             error=step.error_details["message"] if step.error_details else None,
         )
@@ -174,13 +174,22 @@ def build_log_references(
 def collect_artifact_references(step_states: list[WorkflowStepState]) -> list[str]:
     artifact_references: list[str] = []
     for step in step_states:
-        artifact_references.extend(collect_step_artifacts(step.response))
+        artifact_references.extend(collect_step_artifacts(step))
     return deduplicate_preserving_order(artifact_references)
 
 
-def collect_step_artifacts(response_payload: dict[str, Any] | None) -> list[str]:
+def collect_step_artifacts(step_or_payload: WorkflowStepState | dict[str, Any] | None) -> list[str]:
+    if isinstance(step_or_payload, WorkflowStepState):
+        artifact_references = [item.uri or item.name for item in step_or_payload.artifacts]
+        if artifact_references:
+            return artifact_references
+        response_payload = step_or_payload.response
+    else:
+        response_payload = step_or_payload
+
     if not isinstance(response_payload, dict):
         return []
+
     artifact_values = response_payload.get("artifacts")
     if not isinstance(artifact_values, list) and "final_report" in response_payload:
         final_report = response_payload["final_report"]

@@ -8,6 +8,12 @@ from typing import Any, Callable
 from deepagents import create_deep_agent
 
 from contracts.agent_input import AgentExecutionInput
+from contracts.agent_output import (
+    AGENT_EXECUTION_STATUS_WORKFLOW_MEANINGS,
+    AgentExecutionOutput,
+    AgentExecutionStatus,
+    build_agent_execution_output_format,
+)
 from contracts.task_request import TaskRequest
 from contracts.task_response import (
     SpecialistAgentName,
@@ -20,6 +26,14 @@ from contracts.task_response import (
 from settings.supervisor import get_openai_model
 from settings.supervisor import is_live_ai_enabled
 from utils.supervisor import read_last_message_text
+from utils.specialist_step_contract import (
+    build_primary_error_payload,
+    build_step_agent_name,
+    build_step_request_log_summary,
+    build_step_response_log_summary,
+    build_step_system_prompt,
+    map_agent_status_to_workflow_status,
+)
 from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 from utils.workflow_policy import (
     apply_policy_decision_states,
@@ -204,6 +218,12 @@ def execute_step(
     normalized_response = normalize_step_response(raw_response)
     step_state.response = normalized_response["result"]
     step_state.logs = normalized_response["logs"]
+    step_state.analysis_details = normalized_response["analysis_details"]
+    step_state.recommended_actions = normalized_response["recommended_actions"]
+    step_state.artifacts = normalized_response["artifacts"]
+    step_state.warnings = normalized_response["warnings"]
+    step_state.technical_errors = normalized_response["technical_errors"]
+    step_state.supervisor_data = normalized_response["supervisor_data"]
     step_state.execution_details = normalized_response["execution_details"]
     step_state.error_details = normalized_response["error_details"]
     step_state.status = normalized_response["status"]
@@ -214,26 +234,39 @@ def execute_step(
 
 
 def normalize_step_response(raw_response: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(raw_response, dict):
-        raw_response = {}
-    status_value = raw_response.get("status", WorkflowStepStatus.FAILED.value)
     try:
-        normalized_status = WorkflowStepStatus(status_value)
-    except ValueError:
-        normalized_status = WorkflowStepStatus.FAILED
-    if normalized_status not in {
-        WorkflowStepStatus.COMPLETED,
-        WorkflowStepStatus.FAILED,
-    }:
-        normalized_status = WorkflowStepStatus.FAILED
+        agent_output = AgentExecutionOutput.model_validate(raw_response)
+    except Exception:
+        agent_output = AgentExecutionOutput(
+            result={},
+            logs=[],
+            status=AgentExecutionStatus.FAILED,
+            technical_errors=[
+                {
+                    "message": "Specialist agent returned an invalid response payload.",
+                    "code": "invalid_agent_output",
+                    "details": {"raw_response_type": type(raw_response).__name__},
+                }
+            ],
+        )
+
+    normalized_status = map_agent_status_to_workflow_status(agent_output.status)
     error_details = build_error_details(
-        raw_response.get("error") or raw_response.get("error_details"),
+        build_primary_error_payload(agent_output),
         normalized_status,
     )
     return {
-        "result": raw_response.get("result"),
-        "logs": [str(item) for item in raw_response.get("logs", [])],
-        "execution_details": normalize_execution_details(raw_response),
+        "result": agent_output.result,
+        "logs": agent_output.logs,
+        "analysis_details": agent_output.analysis_details,
+        "recommended_actions": [
+            action.model_dump(mode="json") for action in agent_output.recommended_actions
+        ],
+        "artifacts": agent_output.artifacts,
+        "warnings": agent_output.warnings,
+        "technical_errors": agent_output.technical_errors,
+        "supervisor_data": agent_output.supervisor_data,
+        "execution_details": normalize_execution_details(raw_response or {}),
         "error_details": error_details,
         "status": normalized_status,
         "status_reason": build_status_reason(normalized_status, error_details),
@@ -387,41 +420,6 @@ def run_specialist_step(
         return build_fallback_step_response(step, task_request, dependency_results)
 
 
-def build_step_system_prompt(owner_agent: SpecialistAgentName) -> str:
-    return (
-        f"You are {owner_agent.value}. "
-        "Return only valid JSON with keys result, logs, and status."
-    )
-
-
-def build_step_request_log_summary(owner_agent: SpecialistAgentName) -> str:
-    summaries = {
-        SpecialistAgentName.DEPLOYMENT_AGENT: "Analyze the deployment plan and release actions.",
-        SpecialistAgentName.INFRA_AGENT: "Analyze infrastructure dependencies and required changes.",
-        SpecialistAgentName.CI_CD_AGENT: "Analyze the CI/CD pipeline and release flow requirements.",
-        SpecialistAgentName.RISK_POLICY_AGENT: "Review proposed actions for policy and approval requirements.",
-        SpecialistAgentName.EXECUTION_AGENT: "Prepare the execution handoff for approved actions.",
-        SpecialistAgentName.HUMAN_REVIEW_INTERFACE: "Prepare the human approval checkpoint details.",
-    }
-    return summaries.get(owner_agent, "Execute the assigned workflow step.")
-
-
-def build_step_response_log_summary(owner_agent: SpecialistAgentName) -> str:
-    summaries = {
-        SpecialistAgentName.DEPLOYMENT_AGENT: "Deployment analysis result received.",
-        SpecialistAgentName.INFRA_AGENT: "Infrastructure analysis result received.",
-        SpecialistAgentName.CI_CD_AGENT: "CI/CD analysis result received.",
-        SpecialistAgentName.RISK_POLICY_AGENT: "Risk and policy review result received.",
-        SpecialistAgentName.EXECUTION_AGENT: "Execution handoff result received.",
-        SpecialistAgentName.HUMAN_REVIEW_INTERFACE: "Human review checkpoint result received.",
-    }
-    return summaries.get(owner_agent, "Agent returned the workflow step result.")
-
-
-def build_step_agent_name(owner_agent: SpecialistAgentName) -> str:
-    return owner_agent.value.lower().replace("/", " ").replace(" ", "-")
-
-
 def build_step_prompt(
     step: WorkflowPlanStep,
     task_request: TaskRequest,
@@ -437,13 +435,11 @@ def build_step_prompt(
         "Agent input JSON:\n"
         f"{agent_input.model_dump_json(indent=2)}\n\n"
         "Return only valid JSON with this structure:\n"
-        "{\n"
-        '  "result": {"matches_expected_format": true},\n'
-        '  "logs": ["string"],\n'
-        '  "status": "completed|failed"\n'
-        "}\n"
+        f"{json.dumps(build_agent_execution_output_format(step.expected_output_json_format), ensure_ascii=True, indent=2)}\n"
         "The result payload must follow this expected format:\n"
         f"{json.dumps(step.expected_output_json_format, ensure_ascii=True)}\n"
+        "Status meanings for workflow continuation:\n"
+        f"{json.dumps({status.value: meaning for status, meaning in AGENT_EXECUTION_STATUS_WORKFLOW_MEANINGS.items()}, ensure_ascii=True, indent=2)}\n"
     )
 
 

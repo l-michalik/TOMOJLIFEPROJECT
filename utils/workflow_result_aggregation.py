@@ -97,6 +97,10 @@ def build_aggregated_step_result(step_state: WorkflowStepState) -> AggregatedSte
         execution_status=execution_status,
         result=step_state.response,
         logs=step_state.logs,
+        artifacts=step_state.artifacts,
+        warnings=step_state.warnings,
+        technical_errors=step_state.technical_errors,
+        supervisor_data=step_state.supervisor_data,
         execution_details=step_state.execution_details,
         error=error,
         is_problematic=step_state.status

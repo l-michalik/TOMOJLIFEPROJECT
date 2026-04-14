@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import sys
 
 try:
@@ -122,7 +123,19 @@ def build_prompt_log_box_body(
     agent_name: str | None,
     prompt_log_content: str,
     step_id: str | None = None,
+    owner_agent: str | None = None,
+    task_description: str | None = None,
+    status: str | None = None,
 ) -> str:
+    if step_id and owner_agent and task_description and status:
+        lines = [
+            f"step_id: {step_id}",
+            f"owner_agent: {owner_agent}",
+            f"task_description: {task_description}",
+            f"status: {status}",
+        ]
+        return "\n".join(lines)
+
     resolved_agent_name = agent_name or "Supervisor"
     lines = [f"Agent: {resolved_agent_name}"]
     if step_id:
@@ -136,7 +149,19 @@ def build_response_log_box_body(
     agent_name: str | None,
     response_log_content: str,
     step_id: str | None = None,
+    status: str | None = None,
+    summary: str | None = None,
+    owner_agent: str | None = None,
 ) -> str:
+    if step_id and status and summary is not None and owner_agent:
+        lines = [
+            f"step_id: {step_id}",
+            f"status: {status}",
+            f"summary: {summary}",
+            f"owner_agent: {owner_agent}",
+        ]
+        return "\n".join(lines)
+
     resolved_agent_name = agent_name or "Supervisor"
     lines = [f"Agent: {resolved_agent_name}"]
     if step_id:
@@ -154,6 +179,9 @@ def log_ai_request(
     agent_name: str | None = None,
     step_id: str | None = None,
     generic_prompt: str | None = None,
+    owner_agent: str | None = None,
+    task_description: str | None = None,
+    status: str | None = None,
 ) -> None:
     prompt_log_content = build_prompt_log_content(
         prompt=prompt,
@@ -166,6 +194,9 @@ def log_ai_request(
                 agent_name=agent_name,
                 step_id=step_id,
                 prompt_log_content=prompt_log_content,
+                owner_agent=owner_agent,
+                task_description=task_description,
+                status=status,
             ),
         )
 
@@ -179,17 +210,49 @@ def log_ai_response(
     agent_name: str | None = None,
     step_id: str | None = None,
     generic_response: str | None = None,
+    owner_agent: str | None = None,
 ) -> None:
     response_log_content = build_response_log_content(
         response_text=response_text,
         generic_response=generic_response,
     )
     if response_log_content:
+        response_status, response_summary = extract_response_preview_fields(
+            response_text=response_text,
+        )
         render_prompt_log_box(
             title="AI Response Preview",
             body=build_response_log_box_body(
                 agent_name=agent_name,
                 step_id=step_id,
                 response_log_content=response_log_content,
+                status=response_status,
+                summary=response_summary,
+                owner_agent=owner_agent or agent_name,
             ),
         )
+
+
+def extract_response_preview_fields(
+    *,
+    response_text: str,
+) -> tuple[str | None, str | None]:
+    try:
+        payload = json.loads(response_text)
+    except json.JSONDecodeError:
+        return None, None
+
+    if not isinstance(payload, dict):
+        return None, None
+
+    status = payload.get("status")
+    result = payload.get("result")
+    summary = None
+    if isinstance(result, dict):
+        if "summary" in result:
+            summary = str(result["summary"])
+        elif "final_report" in result and isinstance(result["final_report"], dict):
+            final_report = result["final_report"]
+            if "summary" in final_report:
+                summary = str(final_report["summary"])
+    return str(status) if status is not None else None, summary

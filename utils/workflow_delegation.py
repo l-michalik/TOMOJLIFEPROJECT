@@ -397,6 +397,9 @@ def run_specialist_step(
         agent_name=step.owner_agent.value,
         step_id=step.step_id,
         generic_prompt=build_step_request_log_summary(step.owner_agent),
+        owner_agent=step.owner_agent.value,
+        task_description=step.task_description,
+        status=step.status.value,
     )
     agent = create_deep_agent(
         model=get_openai_model(explicit_model=model),
@@ -413,6 +416,7 @@ def run_specialist_step(
         agent_name=step.owner_agent.value,
         step_id=step.step_id,
         generic_response=build_step_response_log_summary(step.owner_agent),
+        owner_agent=step.owner_agent.value,
     )
     try:
         return json.loads(raw_text)

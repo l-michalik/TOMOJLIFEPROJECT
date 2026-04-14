@@ -1,6 +1,6 @@
 # TOMOJLIFEPROJECT
 
-This project contains a basic `Supervisor` API backed by `deepagents`. It accepts a DevOps task request and returns a simple plan, delegation to specialist agents, and identified risks.
+This project contains a basic `Supervisor` API backed by `deepagents`. It accepts a normalized DevOps task request, validates completeness before planning, and returns either a clarification request or a simple execution plan with identified risks.
 
 ## Requirements
 
@@ -50,22 +50,29 @@ curl -X POST http://127.0.0.1:8000/api/tasks \
     "request_id": "req-001",
     "source": "jira",
     "user_id": "platform-engineer",
-    "task_description": "Deploy billing-api to the stage environment",
-    "parameters": {},
-    "context": {
-      "environment": "stage",
+    "user_request": "Deploy billing-api to the stage environment",
+    "params": {
+      "target_environment": "stage",
       "priority": "medium",
       "ticket_id": "OPS-123",
-      "conversation_id": ""
+      "conversation_id": null,
+      "execution_options": {
+        "service_name": "billing-api"
+      }
     }
   }'
 ```
 
+If required planning data is missing, the API returns `status: "needs_clarification"` with `validation_errors` that describe which fields must be completed before workflow planning can start.
+
+Legacy payload fields `task_description`, `parameters`, and `context` are still accepted and mapped to the new contract.
+
+Detailed contract description is available in `docs/supervisor_input_format.md`.
+
 ## Structure
 
 - `api/app.py` - FastAPI application and routes
-- `contracts/task_context.py` - task context contract
-- `contracts/task_request.py` - task input contract
-- `contracts/task_response.py` - task response contract
+- `contracts/task_request.py` - supervisor input contract and validation rules
+- `contracts/task_response.py` - supervisor response contract
 - `agents/supervisor.py` - deepagents-based supervisor logic
 - `prompts/` - Markdown prompts for the supervisor and specialist subagents

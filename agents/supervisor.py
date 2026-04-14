@@ -3,7 +3,7 @@ from pathlib import Path
 
 from deepagents import SubAgent, create_deep_agent
 
-from contracts.task_request import TaskRequest
+from contracts.task_request import InputStatus, TaskRequest
 from contracts.task_response import TaskResponse
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -69,6 +69,9 @@ def read_last_message_text(result: dict) -> str:
 def run_supervisor_agent(
     task_request: TaskRequest, model: str | None = None
 ) -> TaskResponse:
+    if task_request.input_status == InputStatus.NEEDS_CLARIFICATION:
+        return TaskResponse.from_clarification_request(task_request=task_request)
+
     selected_model = get_openai_model(explicit_model=model)
     agent = create_supervisor_agent(model=selected_model)
     result = agent.invoke(
@@ -81,8 +84,8 @@ def run_supervisor_agent(
             ]
         }
     )
-    return TaskResponse(
-        request_id=task_request.request_id,
+    return TaskResponse.from_planned_task(
+        task_request=task_request,
         model=selected_model,
         answer=read_last_message_text(result=result),
     )

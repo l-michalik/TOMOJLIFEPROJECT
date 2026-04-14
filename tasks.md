@@ -1,10 +1,9 @@
 Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD
 
-Wykonaj zadanie : Stworz podstawowego agenta - deepagents i dodaj intrukcje do readme z podstawowym uruchomieniem
+Wykonaj zadanie : <Zaprojektować i opisać docelowy format wejścia do Supervisora zgodny ze specyfikacją systemu. Należy przygotować strukturę danych przyjmującą co najmniej user_request oraz params, z polami na identyfikator zgłoszenia, źródło zgłoszenia (Jira/chat/API), środowisko docelowe, priorytet i dodatkowe parametry wykonania. Trzeba zdefiniować zasady walidacji wejścia, obsługę braków danych oraz sposób oznaczania zgłoszeń wymagających doprecyzowania przed planowaniem.>
 
 Zasady developmentu
-- Pliki mają mieć maksymalnie 500 linijek kodu (wyjatkiem pliki markdown)
-- Wykonuj zadania najprościej jak tylko się da, jasne i ujawniajace nazwy dla fukcji, typów i plikow
-- Unikaj dodawania logiki obronnej lub spekulatywnej wykraczajacej poza rzeczywiste wymagania
-- Wyodrębniaj lub reorganizuj funkcje, typy i narzędzia do odpowiednich plików lub folderów, gdy poprawia to separację zadań i skalowalność (w tym tworzenie nowych plików lub katalogów w uzasadnionych przypadkach).
-- Refaktoryzuj tylko zmodyfikowane fragmenty kodu, chyba że konieczne są szersze zmiany dla poprawności lub integralności architektonicznej.  
+- Każdy plik z kodem nie może przekraczać 500 linii, z wyjątkiem plików Markdown. Rozwiązanie należy implementować w możliwie najprostszy sposób, minimalizując złożoność oraz unikając nadmiernej abstrakcji i przedwczesnej optymalizacji.
+- Nazewnictwo funkcji, typów, zmiennych oraz plików musi być jednoznaczne i opisowe, tak aby jasno komunikowało ich przeznaczenie. Implementacja powinna obejmować wyłącznie wymagania wynikające ze specyfikacji, bez dodawania logiki defensywnej ani spekulatywnej wykraczającej poza określony zakres.
+- Struktura projektu powinna zachowywać separację odpowiedzialności, a w razie potrzeby należy wydzielać funkcje, typy i narzędzia do osobnych plików lub katalogów oraz tworzyć nowe elementy struktury, jeśli poprawia to czytelność i skalowalność rozwiązania.
+- Refaktoryzacja powinna ograniczać się do fragmentów kodu bezpośrednio związanych z realizowanym zadaniem. Szersze zmiany są dopuszczalne wyłącznie wtedy, gdy są konieczne dla zapewnienia poprawności działania lub spójności architektonicznej.

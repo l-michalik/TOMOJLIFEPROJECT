@@ -384,6 +384,10 @@ sequenceDiagram
 
 ## 12. Logical Contracts
 
+The detailed Supervisor intake contract, validation rules, and clarification marking model are defined in:
+
+- `plan/supervisor-input-spec.md`
+
 ### 12.1 `SupervisorInput`
 
 Input model passed to `Supervisor`.

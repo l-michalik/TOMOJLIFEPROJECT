@@ -1,0 +1,5 @@
+Na podstawie specyfikacji projektu zawartej w folderze plan/
+
+Wykonaj zadanie : 
+
+Refaktoryzuj tylko zmodyfikowane fragmenty kodu, chyba że konieczne są szersze zmiany dla poprawności lub integralności architektonicznej. Wyodrębniaj lub reorganizuj funkcje, typy i narzędzia do odpowiednich plików lub folderów, gdy poprawia to separację zadań i skalowalność (w tym tworzenie nowych plików lub katalogów w uzasadnionych przypadkach). Unikaj dodawania logiki obronnej lub spekulatywnej wykraczającej poza rzeczywiste wymagania. Preferuj jawne typowanie i projektowanie sterowane typami zamiast doraźnej logiki warunkowej. Używaj jasnych, ujawniających intencje nazw dla funkcji, zmiennych, typów i plików. Utrzymuj kod prosty, spójny i łatwy w utrzymaniu. Jeden plik powinien zawierać maksymalnie 500 wierszy kodu.

@@ -218,3 +218,8 @@ __marimo__/
 .langgraph_api/
 
 .DS_Store
+
+# Supervisor runtime checkpoints
+.runtime/
+*.sqlite-wal
+*.sqlite-shm

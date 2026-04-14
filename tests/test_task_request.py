@@ -1,16 +1,21 @@
 import unittest
 
-from agents.supervisor import run_supervisor_agent
+from agents.supervisor import checkpoint_store, resume_supervisor_workflow, run_supervisor_agent
 from contracts.task_request import InputStatus, OperationType, TaskRequest, TargetEnvironment
 from contracts.task_response import (
     SpecialistAgentName,
     WorkflowLifecycleStatus,
     WorkflowStepStatus,
 )
+from contracts.workflow_approval import WorkflowApprovalDecisionRequest
 from settings.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
 
 class TaskRequestParsingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        for request_id in {"req-101", "req-102", "req-103", "req-104", "req-105", "req-112"}:
+            checkpoint_store.delete(request_id)
+
     def test_supervisor_prompt_matches_required_plan_fields(self) -> None:
         self.assertIn("agent_instruction", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("expected_output_json_format", SUPERVISOR_SYSTEM_PROMPT)
@@ -134,8 +139,9 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(response.state.current_stage.value, "completed")
         self.assertEqual(len(response.state.plan_steps), len(response.plan))
         self.assertIsNone(response.state.resume_data.next_step_id)
-        self.assertEqual(response.state.resume_data.checkpoint_id, "req-104:checkpoint:delegation")
-        self.assertEqual(response.state.decision_history[-1].decision_id, "DEC-4")
+        self.assertTrue(response.state.resume_data.checkpoint_id)
+        self.assertIn("req-104:resume:", response.state.resume_data.resume_token)
+        self.assertGreaterEqual(len(response.state.decision_history), 4)
         self.assertEqual(
             [step.owner_agent for step in response.plan[:3]],
             [
@@ -224,6 +230,67 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertIn("STEP-7", response.state.aggregation.blocked_step_ids)
         self.assertEqual(response.state.aggregation.next_decision, "await_user_approval")
         self.assertTrue(response.state.aggregation.has_partial_result)
+
+    def test_supervisor_resumes_after_approval_without_rerunning_completed_steps(self) -> None:
+        task_request = TaskRequest.model_validate(
+            {
+                "request_id": "req-112",
+                "source": "jira",
+                "user_id": "platform-engineer",
+                "user_request": "Restart payments-api on production after approval",
+                "params": {
+                    "priority": "high",
+                    "ticket_id": "OPS-112",
+                    "execution_options": {
+                        "service_name": "payments-api",
+                    },
+                    "target_environment": "prod",
+                },
+            }
+        )
+
+        waiting_response = run_supervisor_agent(task_request=task_request)
+        resumed_response = resume_supervisor_workflow(
+            request_id="req-112",
+            approval_request=WorkflowApprovalDecisionRequest(
+                approved=True,
+                decision_by="platform-lead",
+                decision_reason="Approved for planned maintenance window.",
+            ),
+        )
+
+        self.assertEqual(
+            waiting_response.state.resume_data.delegated_step_ids,
+            ["STEP-1", "STEP-2", "STEP-3", "STEP-4", "STEP-5"],
+        )
+        self.assertEqual(resumed_response.state.lifecycle_status, WorkflowLifecycleStatus.COMPLETED)
+        self.assertEqual(
+            resumed_response.state.resume_data.delegated_step_ids,
+            ["STEP-1", "STEP-2", "STEP-3", "STEP-4", "STEP-5", "STEP-7", "STEP-8"],
+        )
+        self.assertEqual(
+            [step.status for step in resumed_response.plan],
+            [
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+                WorkflowStepStatus.COMPLETED,
+            ],
+        )
+        approval_step_state = resumed_response.state.plan_steps[5]
+        self.assertEqual(
+            approval_step_state.response["approval_decision"]["status"],
+            "approved",
+        )
+        self.assertEqual(
+            approval_step_state.response["approval_decision"]["decision_by"],
+            "platform-lead",
+        )
+        self.assertGreaterEqual(len(resumed_response.state.decision_history), 6)
 
 if __name__ == "__main__":
     unittest.main()

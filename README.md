@@ -37,6 +37,8 @@ uv run uvicorn api.app:app --reload
 
 During request handling the API writes runtime workflow logs to the server process output. The logs include request receipt, clarification gating, deepagents planning start/end, fallback activation, and planning completion status.
 
+The Supervisor persists workflow checkpoints with LangGraph `SqliteSaver` in `.runtime/langgraph_supervisor_checkpoints.sqlite`. Each checkpoint stores the normalized input, plan, step states, policy/risk output, approval wait state, delegated step identifiers, aggregated results, and resume metadata. Repeating the same `request_id` resumes from the latest saved checkpoint instead of rerunning completed steps.
+
 Healthcheck:
 
 ```bash
@@ -75,6 +77,18 @@ curl -X POST http://127.0.0.1:8000/api/tasks \
         "release_version": "2026.04.14"
       }
     }
+  }'
+```
+
+Resume an approval-gated workflow after human review:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tasks/req-001/approval \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true,
+    "decision_by": "platform-lead",
+    "decision_reason": "Approved during the maintenance window"
   }'
 ```
 

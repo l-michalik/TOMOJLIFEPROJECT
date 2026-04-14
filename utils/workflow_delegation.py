@@ -35,6 +35,7 @@ StepRunner = Callable[
     [WorkflowPlanStep, TaskRequest, dict[str, Any], str],
     dict[str, Any],
 ]
+CheckpointCallback = Callable[[dict[str, Any]], None]
 
 
 def delegate_workflow_plan(
@@ -43,13 +44,23 @@ def delegate_workflow_plan(
     model: str,
     execution_mode: str = "parallel",
     step_runner: StepRunner | None = None,
+    existing_step_states: list[WorkflowStepState] | None = None,
+    existing_delegated_step_ids: list[str] | None = None,
+    checkpoint_callback: CheckpointCallback | None = None,
 ) -> dict[str, Any]:
     sorted_plan = sorted(plan, key=lambda step: step.step_order)
     mutable_plan = [step.model_copy(deep=True) for step in sorted_plan]
-    step_states = build_initial_step_states(mutable_plan)
+    step_states = (
+        [step.model_copy(deep=True) for step in existing_step_states]
+        if existing_step_states
+        else build_initial_step_states(mutable_plan)
+    )
     state_index = {step.step_id: step for step in step_states}
     plan_index = {step.step_id: step for step in mutable_plan}
-    delegated_step_ids: list[str] = []
+    delegated_step_ids = list(existing_delegated_step_ids or [])
+    for step in mutable_plan:
+        if step.step_id in state_index:
+            step.status = state_index[step.step_id].status
     runner = step_runner or run_specialist_step
 
     while True:
@@ -83,46 +94,30 @@ def delegate_workflow_plan(
                 executed_steps = [future.result() for future in futures]
 
         for executed_step in executed_steps:
-            delegated_step_ids.append(executed_step.step_id)
+            if executed_step.step_id not in delegated_step_ids:
+                delegated_step_ids.append(executed_step.step_id)
             plan_index[executed_step.step_id].status = state_index[
                 executed_step.step_id
             ].status
         apply_policy_decision_states(mutable_plan, step_states)
+        if checkpoint_callback:
+            checkpoint_callback(
+                build_delegation_result(
+                    plan=mutable_plan,
+                    step_states=step_states,
+                    delegated_step_ids=delegated_step_ids,
+                )
+            )
 
     apply_blocked_states(mutable_plan, state_index)
     for step in mutable_plan:
         step.status = state_index[step.step_id].status
 
-    lifecycle_status, current_stage = determine_workflow_progress(step_states)
-    waiting_step_ids = [
-        step.step_id
-        for step in step_states
-        if step.status in {WorkflowStepStatus.WAITING_FOR_APPROVAL, WorkflowStepStatus.BLOCKED}
-    ]
-    completed_steps = [
-        step for step in step_states if step.status == WorkflowStepStatus.COMPLETED
-    ]
-
-    return {
-        "plan": mutable_plan,
-        "step_states": step_states,
-        "aggregation": build_workflow_aggregation(step_states),
-        "current_stage": current_stage,
-        "lifecycle_status": lifecycle_status,
-        "delegated_step_ids": delegated_step_ids,
-        "waiting_step_ids": waiting_step_ids,
-        "last_completed_step_id": completed_steps[-1].step_id if completed_steps else None,
-        "next_step_id": find_next_step_id(step_states),
-        "completed_at": utc_now() if lifecycle_status == WorkflowLifecycleStatus.COMPLETED else None,
-        "delegated_at": utc_now() if delegated_step_ids else None,
-        "waiting_for_results_at": build_waiting_for_results_timestamp(step_states),
-        "waiting_for_approval_at": utc_now()
-        if lifecycle_status == WorkflowLifecycleStatus.WAITING_FOR_APPROVAL
-        else None,
-        "blocked_at": utc_now()
-        if any(step.status == WorkflowStepStatus.BLOCKED for step in step_states)
-        else None,
-    }
+    return build_delegation_result(
+        plan=mutable_plan,
+        step_states=step_states,
+        delegated_step_ids=delegated_step_ids,
+    )
 
 
 def build_initial_step_states(plan: list[WorkflowPlanStep]) -> list[WorkflowStepState]:
@@ -298,6 +293,42 @@ def find_next_step_id(step_states: list[WorkflowStepState]) -> str | None:
         if step.status == WorkflowStepStatus.PLANNED:
             return step.step_id
     return None
+
+
+def build_delegation_result(
+    plan: list[WorkflowPlanStep],
+    step_states: list[WorkflowStepState],
+    delegated_step_ids: list[str],
+) -> dict[str, Any]:
+    lifecycle_status, current_stage = determine_workflow_progress(step_states)
+    waiting_step_ids = [
+        step.step_id
+        for step in step_states
+        if step.status in {WorkflowStepStatus.WAITING_FOR_APPROVAL, WorkflowStepStatus.BLOCKED}
+    ]
+    completed_steps = [
+        step for step in step_states if step.status == WorkflowStepStatus.COMPLETED
+    ]
+    return {
+        "plan": [step.model_copy(deep=True) for step in plan],
+        "step_states": [step.model_copy(deep=True) for step in step_states],
+        "aggregation": build_workflow_aggregation(step_states),
+        "current_stage": current_stage,
+        "lifecycle_status": lifecycle_status,
+        "delegated_step_ids": list(delegated_step_ids),
+        "waiting_step_ids": waiting_step_ids,
+        "last_completed_step_id": completed_steps[-1].step_id if completed_steps else None,
+        "next_step_id": find_next_step_id(step_states),
+        "completed_at": utc_now() if lifecycle_status == WorkflowLifecycleStatus.COMPLETED else None,
+        "delegated_at": utc_now() if delegated_step_ids else None,
+        "waiting_for_results_at": build_waiting_for_results_timestamp(step_states),
+        "waiting_for_approval_at": utc_now()
+        if lifecycle_status == WorkflowLifecycleStatus.WAITING_FOR_APPROVAL
+        else None,
+        "blocked_at": utc_now()
+        if any(step.status == WorkflowStepStatus.BLOCKED for step in step_states)
+        else None,
+    }
 
 
 def build_waiting_for_results_timestamp(

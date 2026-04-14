@@ -6,7 +6,6 @@ This project contains a basic `Supervisor` API for DevOps task orchestration. It
 
 - Python `3.13`
 - `uv`
-- `OPENAI_API_KEY`
 
 ## Installation
 
@@ -21,11 +20,36 @@ The application loads variables from `.env` with `python-dotenv`.
 Example:
 
 ```env
-OPENAI_API_KEY=your_key_here
+APP_AI_MODE=mock
 OPENAI_MODEL=openai:gpt-5.4-mini
+OPENAI_API_KEY=your_key_here
 ```
 
 The default model is `openai:gpt-5.4-mini`.
+
+## AI execution modes
+
+The application supports two AI modes controlled by `APP_AI_MODE`:
+
+- `mock` - default mode. The Supervisor and specialist steps use deterministic fallback logic and do not call OpenAI, even if `OPENAI_API_KEY` is present.
+- `live` - enables real OpenAI calls, but only when `OPENAI_API_KEY` is also set.
+
+Recommended local development setup:
+
+```env
+APP_AI_MODE=mock
+OPENAI_MODEL=openai:gpt-5.4-mini
+```
+
+Recommended smoke-test or staging setup:
+
+```env
+APP_AI_MODE=live
+OPENAI_MODEL=openai:gpt-5.4-mini
+OPENAI_API_KEY=your_key_here
+```
+
+This makes token spend opt-in: local development stays on fallback behavior by default, and real model usage requires an explicit mode switch.
 
 ## Run the API
 

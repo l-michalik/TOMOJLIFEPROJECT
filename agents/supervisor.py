@@ -1,5 +1,3 @@
-import os
-
 from deepagents import create_deep_agent
 
 from contracts.task_request import InputStatus, TaskRequest
@@ -11,6 +9,7 @@ from settings.supervisor import (
     SUPERVISOR_AGENT_NAME,
     SUPERVISOR_SYSTEM_PROMPT,
     get_openai_model,
+    is_live_ai_enabled,
 )
 from utils.supervisor import (
     parse_planned_supervisor_output,
@@ -213,7 +212,7 @@ def has_planned_steps(response: TaskResponse) -> bool:
 
 
 def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
-    if not os.getenv("OPENAI_API_KEY"):
+    if not is_live_ai_enabled():
         return build_fallback_planning_result(task_request)
 
     prompt = task_request.to_prompt()

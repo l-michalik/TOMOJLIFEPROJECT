@@ -1,6 +1,14 @@
 import os
 import unittest
 
+from settings.supervisor import (
+    APP_AI_MODE_ENV,
+    APP_AI_MODE_LIVE,
+    APP_AI_MODE_MOCK,
+    get_app_ai_mode,
+    has_openai_api_key,
+    is_live_ai_enabled,
+)
 from contracts.task_response import SpecialistAgentName
 from utils.workflow_logging import (
     PROMPT_LOG_MODE_FULL,
@@ -20,6 +28,54 @@ from utils.workflow_delegation import (
 
 
 class WorkflowLoggingTests(unittest.TestCase):
+    def test_get_app_ai_mode_defaults_to_mock(self) -> None:
+        previous_value = os.environ.get(APP_AI_MODE_ENV)
+        try:
+            os.environ.pop(APP_AI_MODE_ENV, None)
+            self.assertEqual(get_app_ai_mode(), APP_AI_MODE_MOCK)
+        finally:
+            if previous_value is None:
+                os.environ.pop(APP_AI_MODE_ENV, None)
+            else:
+                os.environ[APP_AI_MODE_ENV] = previous_value
+
+    def test_get_app_ai_mode_falls_back_to_mock_for_invalid_value(self) -> None:
+        previous_value = os.environ.get(APP_AI_MODE_ENV)
+        try:
+            os.environ[APP_AI_MODE_ENV] = "invalid"
+            self.assertEqual(get_app_ai_mode(), APP_AI_MODE_MOCK)
+        finally:
+            if previous_value is None:
+                os.environ.pop(APP_AI_MODE_ENV, None)
+            else:
+                os.environ[APP_AI_MODE_ENV] = previous_value
+
+    def test_is_live_ai_enabled_requires_live_mode_and_api_key(self) -> None:
+        previous_mode = os.environ.get(APP_AI_MODE_ENV)
+        previous_key = os.environ.get("OPENAI_API_KEY")
+        try:
+            os.environ[APP_AI_MODE_ENV] = APP_AI_MODE_LIVE
+            os.environ["OPENAI_API_KEY"] = "test-key"
+            self.assertTrue(has_openai_api_key())
+            self.assertTrue(is_live_ai_enabled())
+
+            os.environ[APP_AI_MODE_ENV] = APP_AI_MODE_MOCK
+            self.assertFalse(is_live_ai_enabled())
+
+            os.environ[APP_AI_MODE_ENV] = APP_AI_MODE_LIVE
+            os.environ["OPENAI_API_KEY"] = "   "
+            self.assertFalse(has_openai_api_key())
+            self.assertFalse(is_live_ai_enabled())
+        finally:
+            if previous_mode is None:
+                os.environ.pop(APP_AI_MODE_ENV, None)
+            else:
+                os.environ[APP_AI_MODE_ENV] = previous_mode
+            if previous_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = previous_key
+
     def test_build_prompt_log_content_returns_generic_prompt_in_generic_mode(self) -> None:
         self.assertEqual(
             build_prompt_log_content(

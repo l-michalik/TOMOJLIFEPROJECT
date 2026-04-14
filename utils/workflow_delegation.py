@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -18,6 +17,7 @@ from contracts.task_response import (
     WorkflowStepStatus,
 )
 from settings.supervisor import get_openai_model
+from settings.supervisor import is_live_ai_enabled
 from utils.supervisor import read_last_message_text
 from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 from utils.workflow_policy import (
@@ -347,7 +347,7 @@ def run_specialist_step(
     dependency_results: dict[str, Any],
     model: str,
 ) -> dict[str, Any]:
-    if not os.getenv("OPENAI_API_KEY"):
+    if not is_live_ai_enabled():
         return build_fallback_step_response(step, task_request, dependency_results)
 
     prompt = build_step_prompt(

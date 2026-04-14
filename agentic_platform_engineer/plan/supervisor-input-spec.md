@@ -58,6 +58,7 @@ The normalized input accepted by `Supervisor` is:
   "intake": {
     "status": "ready_for_planning",
     "missing_fields": [],
+    "invalid_fields": [],
     "clarification_questions": []
   }
 }
@@ -237,12 +238,18 @@ This prevents incomplete requests from entering the planning stage.
 {
   "status": "needs_clarification",
   "missing_fields": [
+    "user_request"
+  ],
+  "invalid_fields": [
     "params.target_environment",
-    "params.priority"
+    "params.priority",
+    "params.execution_params"
   ],
   "clarification_questions": [
+    "What task should be performed?",
     "Which target environment should be used?",
-    "What priority should be assigned to this request?"
+    "What priority should be assigned to this request?",
+    "Which execution parameters should be provided as a structured object?"
   ]
 }
 ```
@@ -268,6 +275,7 @@ The request must also be marked as `needs_clarification` if:
 - `user_request` is present but blank after trimming
 - `params` exists but is not a valid object
 - a required enumerated field contains an unsupported value and intake cannot safely normalize it
+- an optional structured field required for safe normalization is present in an invalid format, for example `context` or `execution_params`
 
 ## 8. Validation Rules
 
@@ -314,6 +322,7 @@ The system must:
 
 - set `intake.status` to `needs_clarification`
 - populate `intake.missing_fields`
+- populate `intake.invalid_fields` when a provided field cannot be safely normalized
 - generate `intake.clarification_questions`
 
 ## 9.2 Clarification Question Generation
@@ -364,6 +373,7 @@ must remain blocked until the missing information is provided and validation is 
   "intake": {
     "status": "ready_for_planning",
     "missing_fields": [],
+    "invalid_fields": [],
     "clarification_questions": []
   }
 }

@@ -21,3 +21,11 @@ from agentic_platform_engineer.contracts.supervisor_intake import (
     SupervisorWorkItem,
     SupervisorWorkItemBuildResult,
 )
+from agentic_platform_engineer.contracts.supervisor_plan import (
+    PlanStatus,
+    PlanStep,
+    PlanStepStatus,
+    SupervisorPlan,
+    SupervisorPlanBuildResult,
+    TargetAgent,
+)

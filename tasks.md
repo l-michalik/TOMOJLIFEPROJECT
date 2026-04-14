@@ -1,6 +1,6 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents opanowalem ją na poziomie senior developera
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zbudować warstwę agregacji, w której Supervisor odbiera wyniki od DeploymentAgent/InfraAgent/CI_CD_Agent i zapisuje je do wspólnego stanu zadania. Należy ujednolicić odpowiedzi subagentów do wspólnego modelu, zapisać status sukcesu lub błędu, dołączyć logi i szczegóły wykonania oraz zaktualizować status planu. Jeżeli część kroków zakończy się powodzeniem, a część błędem, Supervisor ma zachować częściowy wynik, oznaczyć kroki problematyczne i przygotować dane do dalszej decyzji.>
 
-Wykonaj zadanie : <Zaimplementować mechanizm wywoływania agentów specjalistycznych na podstawie planu wygenerowanego przez Supervisora. Dla każdego kroku należy przekazać do subagenta instrukcję, kontekst, zależności, identyfikator kroku oraz oczekiwany format odpowiedzi {'result','logs','status'}. Mechanizm musi wspierać delegowanie sekwencyjne i równoległe, a także blokować uruchomienie kroku, gdy nie zostały spełnione wymagane zależności lub brakuje danych wejściowych.>
+Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 
 Zasady developmentu
 - Każdy plik z kodem nie może przekraczać 500 linii, z wyjątkiem plików Markdown. Rozwiązanie należy implementować w możliwie najprostszy sposób, minimalizując złożoność oraz unikając nadmiernej abstrakcji i przedwczesnej optymalizacji.

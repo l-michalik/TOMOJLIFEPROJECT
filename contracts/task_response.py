@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from contracts.task_request import ClarificationItem, RequestSource, TaskRequest
+from contracts.workflow_aggregation import WorkflowAggregationSummary
 
 
 class SupervisorResponseStatus(str, Enum):
@@ -92,6 +93,8 @@ class WorkflowStepState(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     response: dict[str, Any] | None = None
     logs: list[str] = Field(default_factory=list)
+    execution_details: dict[str, Any] = Field(default_factory=dict)
+    error_details: dict[str, Any] | None = None
     status_reason: str | None = None
     updated_at: datetime
 
@@ -137,6 +140,7 @@ class WorkflowState(BaseModel):
     current_stage: WorkflowStage
     lifecycle_status: WorkflowLifecycleStatus
     plan_steps: list[WorkflowStepState] = Field(default_factory=list)
+    aggregation: WorkflowAggregationSummary | None = None
     decision_history: list[WorkflowDecisionRecord] = Field(default_factory=list)
     resume_data: WorkflowResumeData
     timestamps: WorkflowTimestamps
@@ -333,6 +337,7 @@ def build_planned_workflow_state(
         current_stage=current_stage,
         lifecycle_status=lifecycle_status,
         plan_steps=delegation_result["step_states"] if delegation_result else build_step_states(plan=plan, updated_at=now),
+        aggregation=delegation_result["aggregation"] if delegation_result else None,
         decision_history=decision_history,
         resume_data=WorkflowResumeData(
             checkpoint_id=f"{task_request.request_id}:checkpoint:delegation"

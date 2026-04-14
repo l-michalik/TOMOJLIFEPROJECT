@@ -20,6 +20,12 @@ from contracts.task_response import (
 )
 from settings.supervisor import get_openai_model
 from utils.supervisor import read_last_message_text
+from utils.workflow_result_aggregation import (
+    build_error_details,
+    build_status_reason,
+    build_workflow_aggregation,
+    normalize_execution_details,
+)
 
 StepRunner = Callable[
     [WorkflowPlanStep, TaskRequest, dict[str, Any], str],
@@ -95,6 +101,7 @@ def delegate_workflow_plan(
     return {
         "plan": mutable_plan,
         "step_states": step_states,
+        "aggregation": build_workflow_aggregation(step_states),
         "current_stage": current_stage,
         "lifecycle_status": lifecycle_status,
         "delegated_step_ids": delegated_step_ids,
@@ -188,10 +195,12 @@ def execute_step(
     normalized_response = normalize_step_response(raw_response)
     step_state.response = normalized_response["result"]
     step_state.logs = normalized_response["logs"]
+    step_state.execution_details = normalized_response["execution_details"]
+    step_state.error_details = normalized_response["error_details"]
     step_state.status = normalized_response["status"]
     step_state.updated_at = utc_now()
     if step_state.status != WorkflowStepStatus.COMPLETED:
-        step_state.status_reason = "Specialist agent returned a non-completed status."
+        step_state.status_reason = normalized_response["status_reason"]
     return step
 
 
@@ -208,10 +217,17 @@ def normalize_step_response(raw_response: dict[str, Any]) -> dict[str, Any]:
         WorkflowStepStatus.FAILED,
     }:
         normalized_status = WorkflowStepStatus.FAILED
+    error_details = build_error_details(
+        raw_response.get("error") or raw_response.get("error_details"),
+        normalized_status,
+    )
     return {
         "result": raw_response.get("result"),
         "logs": [str(item) for item in raw_response.get("logs", [])],
+        "execution_details": normalize_execution_details(raw_response),
+        "error_details": error_details,
         "status": normalized_status,
+        "status_reason": build_status_reason(normalized_status, error_details),
     }
 
 
@@ -362,9 +378,11 @@ def build_fallback_step_response(
             f"Delegated step {step.step_id} to {step.owner_agent.value}.",
             "Fallback specialist response generated without external model invocation.",
         ],
+        "execution_details": {
+            "response_source": "fallback",
+            "dependency_count": len(dependency_results),
+        },
         "status": WorkflowStepStatus.COMPLETED.value,
     }
-
-
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)

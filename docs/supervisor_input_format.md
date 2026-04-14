@@ -123,6 +123,79 @@ Przykładowa odpowiedź:
 }
 ```
 
+## Format odpowiedzi po planowaniu
+
+Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany kontrakt workflow:
+
+```json
+{
+  "request_id": "req-001",
+  "status": "planned",
+  "validation_errors": [],
+  "normalized_request": {
+    "request_id": "req-001",
+    "source": "jira",
+    "user_id": "platform-engineer",
+    "user_request": "Deploy billing-api to the stage environment",
+    "params": {
+      "target_environment": "stage",
+      "priority": "medium",
+      "ticket_id": "OPS-123",
+      "conversation_id": null,
+      "execution_options": {
+        "service_name": "billing-api"
+      }
+    },
+    "clarification_items": [],
+    "input_status": "ready_for_planning"
+  },
+  "model": "openai:gpt-5.4-mini",
+  "plan": [
+    {
+      "step_id": "STEP-1",
+      "owner_agent": "DeploymentAgent",
+      "task_description": "Prepare deployment rollout for billing-api on stage.",
+      "step_order": 1,
+      "depends_on": [],
+      "required_input_context": {
+        "target_environment": "stage",
+        "service_name": "billing-api"
+      },
+      "expected_result": "Deployment plan is ready for technical validation.",
+      "status": "planned",
+      "risk_flags": [],
+      "requires_user_approval": false
+    }
+  ],
+  "state": {
+    "workflow_id": "workflow-req-001",
+    "current_stage": "risk_review",
+    "workflow_status": "planning_completed",
+    "checkpoint_id": "req-001:checkpoint:planning",
+    "resume_token": "req-001:resume:planning",
+    "last_completed_step_id": null,
+    "next_step_id": "STEP-1"
+  },
+  "confidence": 0.92,
+  "risk_flags": [],
+  "requires_user_approval": false,
+  "answer": null
+}
+```
+
+Znaczenie dodatkowych pól:
+
+- `plan[*].step_order`: kolejność wykonania kroków w workflow.
+- `plan[*].required_input_context`: kontekst wejściowy wymagany przez agenta odpowiedzialnego za krok.
+- `plan[*].expected_result`: oczekiwany rezultat kroku przekazywany dalej do agregacji.
+- `plan[*].status`: status kroku na końcu etapu planowania.
+- `state.workflow_id`: trwały identyfikator workflow.
+- `state.checkpoint_id`: identyfikator checkpointu zapisywanego po planowaniu.
+- `state.resume_token`: identyfikator potrzebny do wznowienia procesu od zapisanego checkpointu.
+- `confidence`: ocena pewności planu zwrócona przez Supervisora.
+- `risk_flags`: zagregowane flagi ryzyka dla całego workflow.
+- `requires_user_approval`: informacja, czy workflow powinien zatrzymać się na bramce akceptacji użytkownika.
+
 ## Zgodność wsteczna
 
 API nadal akceptuje dotychczasowy format:

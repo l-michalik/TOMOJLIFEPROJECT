@@ -153,7 +153,7 @@ class TaskRequest(BaseModel):
 
     def to_prompt(self) -> str:
         return (
-            "Prepare a Supervisor response for the DevOps task below.\n\n"
+            "Prepare a Supervisor planning response for the DevOps task below.\n\n"
             f"request_id: {self.request_id}\n"
             f"source: {self.source.value}\n"
             f"user_id: {self.user_id}\n"
@@ -164,10 +164,26 @@ class TaskRequest(BaseModel):
             f"params.ticket_id: {self.params.ticket_id}\n"
             f"params.conversation_id: {self.params.conversation_id}\n"
             f"params.execution_options: {self.params.execution_options}\n\n"
-            "Respond in 3 sections:\n"
-            "1. Short task summary.\n"
-            "2. Plan steps with assigned specialist agents.\n"
-            "3. Risks or actions that require approval.\n"
+            "Return only valid JSON with this structure:\n"
+            "{\n"
+            '  "plan": [\n'
+            "    {\n"
+            '      "step_id": "STEP-1",\n'
+            '      "owner_agent": "DeploymentAgent|InfraAgent|CI_CD_Agent|Risk/Policy Agent|Human Review Interface",\n'
+            '      "task_description": "string",\n'
+            '      "step_order": 1,\n'
+            '      "depends_on": ["STEP-0"],\n'
+            '      "required_input_context": {},\n'
+            '      "expected_result": "string",\n'
+            '      "status": "planned|waiting_for_approval|blocked",\n'
+            '      "risk_flags": ["string"],\n'
+            '      "requires_user_approval": false\n'
+            "    }\n"
+            "  ],\n"
+            '  "confidence": 0.0,\n'
+            '  "risk_flags": ["string"],\n'
+            '  "requires_user_approval": false\n'
+            "}\n"
         )
 
 

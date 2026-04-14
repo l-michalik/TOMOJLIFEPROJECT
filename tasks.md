@@ -1,6 +1,6 @@
 Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD
 
-Wykonaj zadanie : <Zaprojektować i opisać docelowy format wejścia do Supervisora zgodny ze specyfikacją systemu. Należy przygotować strukturę danych przyjmującą co najmniej user_request oraz params, z polami na identyfikator zgłoszenia, źródło zgłoszenia (Jira/chat/API), środowisko docelowe, priorytet i dodatkowe parametry wykonania. Trzeba zdefiniować zasady walidacji wejścia, obsługę braków danych oraz sposób oznaczania zgłoszeń wymagających doprecyzowania przed planowaniem.>
+Wykonaj zadanie : <Przygotować strukturę wyjściową zwracaną przez Supervisora po etapie planowania. Kontrakt musi zawierać plan jako listę kroków z przypisanym agentem, opisem taska, kolejnością, zależnościami, wymaganym kontekstem wejściowym, oczekiwanym rezultatem i statusem kroku, a także obiekt state przechowujący stan workflow. Dodatkowo należy uwzględnić pole confidence, flagi ryzyka, informację o wymaganej akceptacji użytkownika oraz identyfikatory potrzebne do checkpointingu i wznowienia procesu.>
 
 Zasady developmentu
 - Każdy plik z kodem nie może przekraczać 500 linii, z wyjątkiem plików Markdown. Rozwiązanie należy implementować w możliwie najprostszy sposób, minimalizując złożoność oraz unikając nadmiernej abstrakcji i przedwczesnej optymalizacji.

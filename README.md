@@ -1,6 +1,6 @@
 # TOMOJLIFEPROJECT
 
-This project contains a basic `Supervisor` API backed by `deepagents`. It accepts a normalized DevOps task request, parses the incoming description into a standardized work item, validates completeness before planning, and returns either a clarification request or a structured planning contract with workflow state, plan steps, confidence, and risk metadata.
+This project contains a basic `Supervisor` API for DevOps task orchestration. It accepts a normalized task request, parses the incoming description into a standardized work item, validates completeness before planning, and returns either a clarification request or a structured planning contract with workflow state, ordered plan steps, confidence, and risk metadata.
 
 ## Requirements
 
@@ -67,7 +67,7 @@ If required planning data is missing, the API returns `status: "needs_clarificat
 
 If planning succeeds, the API returns `status: "planned"` and a contract that includes:
 
-- `plan`: ordered workflow steps with assigned specialist agent, task description, dependencies, required context, expected result, step status, risk flags, and approval requirement,
+- `plan`: ordered workflow steps with assigned target agent, step instruction, expected JSON response format, start conditions, dependencies, aggregation handoff condition, required context, expected result, step status, risk flags, and approval requirement,
 - `state`: workflow identifiers and checkpoint/resume metadata needed for persistence and restart,
 - `confidence`: supervisor confidence score for the plan,
 - `risk_flags`: aggregated workflow-level risk signals,

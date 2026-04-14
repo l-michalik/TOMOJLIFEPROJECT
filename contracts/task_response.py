@@ -37,6 +37,7 @@ class SpecialistAgentName(str, Enum):
     INFRA_AGENT = "InfraAgent"
     CI_CD_AGENT = "CI_CD_Agent"
     RISK_POLICY_AGENT = "Risk/Policy Agent"
+    EXECUTION_AGENT = "Execution Agent"
     HUMAN_REVIEW_INTERFACE = "Human Review Interface"
 
 
@@ -44,8 +45,12 @@ class WorkflowPlanStep(BaseModel):
     step_id: str
     owner_agent: SpecialistAgentName
     task_description: str
+    agent_instruction: str
     step_order: int
     depends_on: list[str] = Field(default_factory=list)
+    expected_output_json_format: dict[str, Any] = Field(default_factory=dict)
+    start_conditions: list[str] = Field(default_factory=list)
+    result_handoff_condition: str
     required_input_context: dict[str, Any] = Field(default_factory=dict)
     expected_result: str
     status: WorkflowStepStatus

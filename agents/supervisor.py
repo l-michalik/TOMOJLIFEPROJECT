@@ -1,3 +1,5 @@
+import os
+
 from deepagents import create_deep_agent
 
 from contracts.task_request import InputStatus, TaskRequest
@@ -13,6 +15,8 @@ from utils.supervisor import (
     read_last_message_text,
     sort_plan_steps,
 )
+from utils.workflow_plan_builder import build_workflow_plan
+from utils.workflow_risk import assess_workflow_risk, build_workflow_confidence
 
 
 def create_supervisor_agent(model: str | None = None):
@@ -31,7 +35,26 @@ def run_supervisor_agent(
         return TaskResponse.from_clarification_request(task_request=task_request)
 
     selected_model = get_openai_model(explicit_model=model)
-    agent = create_supervisor_agent(model=selected_model)
+    planned_output = run_supervisor_planning(
+        task_request=task_request,
+        model=selected_model,
+    )
+    risk_assessment = assess_workflow_risk(task_request)
+    return TaskResponse.from_planned_task(
+        task_request=task_request,
+        model=selected_model,
+        plan=sort_plan_steps(planned_output["plan"]),
+        confidence=planned_output["confidence"],
+        risk_flags=planned_output["risk_flags"] or risk_assessment.risk_flags,
+        requires_user_approval=planned_output["requires_user_approval"],
+    )
+
+
+def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
+    if not os.getenv("OPENAI_API_KEY"):
+        return build_fallback_planning_result(task_request)
+
+    agent = create_supervisor_agent(model=model)
     result = agent.invoke(
         {
             "messages": [
@@ -42,14 +65,26 @@ def run_supervisor_agent(
             ]
         }
     )
-    planned_output = parse_planned_supervisor_output(
-        raw_text=read_last_message_text(result=result)
-    )
-    return TaskResponse.from_planned_task(
-        task_request=task_request,
-        model=selected_model,
-        plan=sort_plan_steps(planned_output.plan),
-        confidence=planned_output.confidence,
-        risk_flags=planned_output.risk_flags,
-        requires_user_approval=planned_output.requires_user_approval,
-    )
+
+    raw_text = read_last_message_text(result=result)
+    try:
+        planned_output = parse_planned_supervisor_output(raw_text=raw_text)
+    except Exception:
+        return build_fallback_planning_result(task_request)
+
+    return {
+        "plan": planned_output.plan,
+        "confidence": planned_output.confidence,
+        "risk_flags": planned_output.risk_flags,
+        "requires_user_approval": planned_output.requires_user_approval,
+    }
+
+
+def build_fallback_planning_result(task_request: TaskRequest) -> dict:
+    risk_assessment = assess_workflow_risk(task_request)
+    return {
+        "plan": build_workflow_plan(task_request),
+        "confidence": build_workflow_confidence(task_request),
+        "risk_flags": risk_assessment.risk_flags,
+        "requires_user_approval": risk_assessment.requires_user_approval,
+    }

@@ -203,8 +203,27 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
       "step_id": "STEP-1",
       "owner_agent": "DeploymentAgent",
       "task_description": "Prepare deployment rollout for billing-api on stage.",
+      "agent_instruction": "Review deployment prerequisites and return only JSON.",
       "step_order": 1,
       "depends_on": [],
+      "expected_output_json_format": {
+        "focus": "deployment",
+        "summary": "string",
+        "findings": ["string"],
+        "proposed_actions": [
+          {
+            "action_id": "string",
+            "action_type": "string",
+            "details": {}
+          }
+        ],
+        "risks": ["string"],
+        "artifacts": ["string"]
+      },
+      "start_conditions": [
+        "Request input is validated and ready for planning."
+      ],
+      "result_handoff_condition": "Forward the result when deployment prerequisites and proposed actions are returned in JSON.",
       "required_input_context": {
         "target_environment": "stage",
         "service_name": "billing-api"
@@ -234,6 +253,10 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
 Znaczenie dodatkowych pól:
 
 - `plan[*].step_order`: kolejność wykonania kroków w workflow.
+- `plan[*].agent_instruction`: instrukcja przekazywana do docelowego agenta dla danego kroku.
+- `plan[*].expected_output_json_format`: oczekiwany format odpowiedzi JSON zwracanej przez agenta.
+- `plan[*].start_conditions`: warunki rozpoczęcia kroku.
+- `plan[*].result_handoff_condition`: warunek przekazania wyniku kroku do agregacji.
 - `plan[*].required_input_context`: kontekst wejściowy wymagany przez agenta odpowiedzialnego za krok.
 - `plan[*].expected_result`: oczekiwany rezultat kroku przekazywany dalej do agregacji.
 - `plan[*].status`: status kroku na końcu etapu planowania.

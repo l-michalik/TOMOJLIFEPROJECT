@@ -1,13 +1,17 @@
 import unittest
+from threading import Lock
+from time import sleep
 
 from agents.supervisor import run_supervisor_agent
 from contracts.task_request import InputStatus, OperationType, TaskRequest, TargetEnvironment
 from contracts.task_response import (
     SpecialistAgentName,
     WorkflowLifecycleStatus,
+    WorkflowPlanStep,
     WorkflowStepStatus,
 )
 from settings.supervisor import SUPERVISOR_SYSTEM_PROMPT
+from utils.workflow_delegation import delegate_workflow_plan
 
 
 class TaskRequestParsingTests(unittest.TestCase):
@@ -130,12 +134,12 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(response.status.value, "planned")
         self.assertFalse(response.requires_user_approval)
         self.assertEqual(len(response.plan), 7)
-        self.assertEqual(response.state.lifecycle_status, WorkflowLifecycleStatus.PLANNED)
-        self.assertEqual(response.state.current_stage.value, "delegation")
+        self.assertEqual(response.state.lifecycle_status, WorkflowLifecycleStatus.COMPLETED)
+        self.assertEqual(response.state.current_stage.value, "completed")
         self.assertEqual(len(response.state.plan_steps), len(response.plan))
-        self.assertEqual(response.state.resume_data.next_step_id, "STEP-1")
-        self.assertEqual(response.state.resume_data.checkpoint_id, "req-104:checkpoint:planning")
-        self.assertEqual(response.state.decision_history[-1].decision_id, "DEC-3")
+        self.assertIsNone(response.state.resume_data.next_step_id)
+        self.assertEqual(response.state.resume_data.checkpoint_id, "req-104:checkpoint:delegation")
+        self.assertEqual(response.state.decision_history[-1].decision_id, "DEC-4")
         self.assertEqual(
             [step.owner_agent for step in response.plan[:3]],
             [
@@ -151,11 +155,16 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertTrue(response.plan[0].result_handoff_condition)
         self.assertEqual(response.plan[4].owner_agent, SpecialistAgentName.RISK_POLICY_AGENT)
         self.assertEqual(response.plan[5].owner_agent, SpecialistAgentName.EXECUTION_AGENT)
-        self.assertEqual(response.plan[5].status, WorkflowStepStatus.PLANNED)
+        self.assertEqual(response.plan[5].status, WorkflowStepStatus.COMPLETED)
         self.assertEqual(
             response.plan[6].owner_agent,
             SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
         )
+        self.assertTrue(all(step.status == WorkflowStepStatus.COMPLETED for step in response.plan))
+        self.assertEqual(len(response.state.resume_data.delegated_step_ids), 7)
+        self.assertIsNotNone(response.state.timestamps.completed_at)
+        self.assertTrue(response.state.plan_steps[0].response)
+        self.assertTrue(response.state.plan_steps[0].logs)
 
     def test_supervisor_adds_approval_gate_for_production_restart(self) -> None:
         task_request = TaskRequest.model_validate(
@@ -188,8 +197,15 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(response.state.current_stage.value, "human_review")
         self.assertIn("STEP-6", response.state.resume_data.waiting_step_ids)
         self.assertIsNotNone(response.state.timestamps.waiting_for_approval_at)
+        self.assertEqual(
+            response.state.resume_data.delegated_step_ids,
+            ["STEP-1", "STEP-2", "STEP-3", "STEP-4", "STEP-5"],
+        )
         approval_step = response.plan[5]
         execution_step = response.plan[6]
+        final_report_step = response.plan[7]
+        for step in response.plan[:5]:
+            self.assertEqual(step.status, WorkflowStepStatus.COMPLETED)
         self.assertEqual(
             approval_step.owner_agent,
             SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
@@ -199,6 +215,224 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(execution_step.owner_agent, SpecialistAgentName.EXECUTION_AGENT)
         self.assertEqual(execution_step.status, WorkflowStepStatus.BLOCKED)
         self.assertEqual(execution_step.depends_on, ["STEP-6"])
+        self.assertEqual(final_report_step.status, WorkflowStepStatus.BLOCKED)
+
+    def test_workflow_delegation_supports_parallel_batches(self) -> None:
+        task_request = TaskRequest.model_validate(
+            {
+                "request_id": "req-106",
+                "source": "api",
+                "user_id": "platform-engineer",
+                "user_request": "Deploy billing-api to stage version 2026.04.14",
+                "params": {
+                    "priority": "medium",
+                    "execution_options": {},
+                },
+            }
+        )
+        concurrency = ConcurrencyTracker()
+
+        def fake_runner(step, _task_request, _dependency_results, _model):
+            concurrency.enter()
+            sleep(0.02)
+            concurrency.leave()
+            return {
+                "result": {"step_id": step.step_id},
+                "logs": [f"completed {step.step_id}"],
+                "status": "completed",
+            }
+
+        result = delegate_workflow_plan(
+            plan=build_parallel_test_plan(),
+            task_request=task_request,
+            model="test-model",
+            execution_mode="parallel",
+            step_runner=fake_runner,
+        )
+
+        self.assertEqual(result["lifecycle_status"], WorkflowLifecycleStatus.COMPLETED)
+        self.assertGreaterEqual(concurrency.max_active, 2)
+        self.assertEqual(result["delegated_step_ids"][:3], ["STEP-1", "STEP-2", "STEP-3"])
+
+    def test_workflow_delegation_supports_sequential_execution(self) -> None:
+        task_request = TaskRequest.model_validate(
+            {
+                "request_id": "req-108",
+                "source": "api",
+                "user_id": "platform-engineer",
+                "user_request": "Deploy billing-api to stage version 2026.04.14",
+                "params": {
+                    "priority": "medium",
+                    "execution_options": {},
+                },
+            }
+        )
+        concurrency = ConcurrencyTracker()
+
+        def fake_runner(step, _task_request, _dependency_results, _model):
+            concurrency.enter()
+            sleep(0.02)
+            concurrency.leave()
+            return {
+                "result": {"step_id": step.step_id},
+                "logs": [f"completed {step.step_id}"],
+                "status": "completed",
+            }
+
+        result = delegate_workflow_plan(
+            plan=build_parallel_test_plan(),
+            task_request=task_request,
+            model="test-model",
+            execution_mode="sequential",
+            step_runner=fake_runner,
+        )
+
+        self.assertEqual(result["lifecycle_status"], WorkflowLifecycleStatus.COMPLETED)
+        self.assertEqual(concurrency.max_active, 1)
+
+    def test_workflow_delegation_blocks_missing_input_context(self) -> None:
+        task_request = TaskRequest.model_validate(
+            {
+                "request_id": "req-107",
+                "source": "api",
+                "user_id": "platform-engineer",
+                "user_request": "Deploy billing-api to stage version 2026.04.14",
+                "params": {
+                    "priority": "medium",
+                    "execution_options": {},
+                },
+            }
+        )
+        plan = [
+            WorkflowPlanStep(
+                step_id="STEP-1",
+                owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+                task_description="Analyze deployment prerequisites.",
+                agent_instruction="Return JSON.",
+                step_order=1,
+                depends_on=[],
+                expected_output_json_format={"summary": "string"},
+                start_conditions=["Validated input is available."],
+                result_handoff_condition="Return the result as JSON.",
+                required_input_context={"service_name": None},
+                expected_result="Deployment prerequisites analyzed.",
+                status=WorkflowStepStatus.PLANNED,
+            ),
+            WorkflowPlanStep(
+                step_id="STEP-2",
+                owner_agent=SpecialistAgentName.INFRA_AGENT,
+                task_description="Analyze infrastructure dependencies.",
+                agent_instruction="Return JSON.",
+                step_order=2,
+                depends_on=["STEP-1"],
+                expected_output_json_format={"summary": "string"},
+                start_conditions=["Step 1 completed."],
+                result_handoff_condition="Return the result as JSON.",
+                required_input_context={"environment": "stage"},
+                expected_result="Infrastructure dependencies analyzed.",
+                status=WorkflowStepStatus.PLANNED,
+            ),
+        ]
+
+        result = delegate_workflow_plan(
+            plan=plan,
+            task_request=task_request,
+            model="test-model",
+            execution_mode="sequential",
+            step_runner=lambda *_: {
+                "result": {"unexpected": True},
+                "logs": [],
+                "status": "completed",
+            },
+        )
+
+        self.assertEqual(result["lifecycle_status"], WorkflowLifecycleStatus.BLOCKED)
+        self.assertEqual(result["step_states"][0].status, WorkflowStepStatus.BLOCKED)
+        self.assertEqual(result["step_states"][1].status, WorkflowStepStatus.BLOCKED)
+        self.assertEqual(
+            result["step_states"][0].status_reason,
+            "Missing required input context.",
+        )
+        self.assertEqual(
+            result["step_states"][1].status_reason,
+            "Required dependency did not reach completed status.",
+        )
+
+class ConcurrencyTracker:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._active = 0
+        self.max_active = 0
+
+    def enter(self) -> None:
+        with self._lock:
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+
+    def leave(self) -> None:
+        with self._lock:
+            self._active -= 1
+
+
+def build_parallel_test_plan() -> list[WorkflowPlanStep]:
+    return [
+        WorkflowPlanStep(
+            step_id="STEP-1",
+            owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_description="Analyze deployment prerequisites.",
+            agent_instruction="Return JSON.",
+            step_order=1,
+            depends_on=[],
+            expected_output_json_format={"summary": "string"},
+            start_conditions=["Validated input is available."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"service_name": "billing-api"},
+            expected_result="Deployment prerequisites analyzed.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+        WorkflowPlanStep(
+            step_id="STEP-2",
+            owner_agent=SpecialistAgentName.INFRA_AGENT,
+            task_description="Analyze infrastructure dependencies.",
+            agent_instruction="Return JSON.",
+            step_order=2,
+            depends_on=[],
+            expected_output_json_format={"summary": "string"},
+            start_conditions=["Validated input is available."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"environment": "stage"},
+            expected_result="Infrastructure dependencies analyzed.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+        WorkflowPlanStep(
+            step_id="STEP-3",
+            owner_agent=SpecialistAgentName.CI_CD_AGENT,
+            task_description="Analyze pipeline impact.",
+            agent_instruction="Return JSON.",
+            step_order=3,
+            depends_on=[],
+            expected_output_json_format={"summary": "string"},
+            start_conditions=["Validated input is available."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"pipeline": "default"},
+            expected_result="CI/CD impact analyzed.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+        WorkflowPlanStep(
+            step_id="STEP-4",
+            owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_description="Prepare rollout strategy.",
+            agent_instruction="Return JSON.",
+            step_order=4,
+            depends_on=["STEP-1", "STEP-2", "STEP-3"],
+            expected_output_json_format={"summary": "string"},
+            start_conditions=["Previous steps completed."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"service_name": "billing-api"},
+            expected_result="Rollout strategy prepared.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+    ]
 
 
 if __name__ == "__main__":

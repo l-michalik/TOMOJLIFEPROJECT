@@ -16,6 +16,7 @@ from utils.supervisor import (
     sort_plan_steps,
 )
 from utils.workflow_logging import get_application_logger, log_ai_request
+from utils.workflow_delegation import delegate_workflow_plan
 from utils.workflow_plan_builder import build_workflow_plan
 from utils.workflow_risk import assess_workflow_risk, build_workflow_confidence
 
@@ -32,7 +33,9 @@ def create_supervisor_agent(model: str | None = None):
 
 
 def run_supervisor_agent(
-    task_request: TaskRequest, model: str | None = None
+    task_request: TaskRequest,
+    model: str | None = None,
+    execution_mode: str = "parallel",
 ) -> TaskResponse:
     if task_request.input_status == InputStatus.NEEDS_CLARIFICATION:
         return TaskResponse.from_clarification_request(task_request=task_request)
@@ -43,13 +46,21 @@ def run_supervisor_agent(
         model=selected_model,
     )
     risk_assessment = assess_workflow_risk(task_request)
+    plan = sort_plan_steps(planned_output["plan"])
+    delegation_result = delegate_workflow_plan(
+        plan=plan,
+        task_request=task_request,
+        model=selected_model,
+        execution_mode=execution_mode,
+    )
     response = TaskResponse.from_planned_task(
         task_request=task_request,
         model=selected_model,
-        plan=sort_plan_steps(planned_output["plan"]),
+        plan=delegation_result["plan"],
         confidence=planned_output["confidence"],
         risk_flags=planned_output["risk_flags"] or risk_assessment.risk_flags,
         requires_user_approval=planned_output["requires_user_approval"],
+        delegation_result=delegation_result,
     )
     return response
 

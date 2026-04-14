@@ -1,6 +1,6 @@
 Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents opanowalem ją na poziomie senior developera
 
-Wykonaj zadanie : <Zaprojektować i zaimplementować obiekt state przechowujący pełny lifecycle zadania. Stan powinien zawierać identyfikator requestu, źródło zgłoszenia, aktualny etap workflow, listę kroków planu, status każdego kroku, historię decyzji, dane potrzebne do ponownego uruchomienia oraz znaczniki czasu. Należy przewidzieć stany co najmniej: received, needs_clarification, planned, delegated, waiting_for_results, waiting_for_approval, executing, completed, failed i blocked.>
+Wykonaj zadanie : <Zaimplementować mechanizm wywoływania agentów specjalistycznych na podstawie planu wygenerowanego przez Supervisora. Dla każdego kroku należy przekazać do subagenta instrukcję, kontekst, zależności, identyfikator kroku oraz oczekiwany format odpowiedzi {'result','logs','status'}. Mechanizm musi wspierać delegowanie sekwencyjne i równoległe, a także blokować uruchomienie kroku, gdy nie zostały spełnione wymagane zależności lub brakuje danych wejściowych.>
 
 Zasady developmentu
 - Każdy plik z kodem nie może przekraczać 500 linii, z wyjątkiem plików Markdown. Rozwiązanie należy implementować w możliwie najprostszy sposób, minimalizując złożoność oraz unikając nadmiernej abstrakcji i przedwczesnej optymalizacji.

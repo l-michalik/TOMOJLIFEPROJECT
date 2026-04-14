@@ -90,6 +90,9 @@ class WorkflowStepState(BaseModel):
     task_description: str
     status: WorkflowStepStatus
     depends_on: list[str] = Field(default_factory=list)
+    response: dict[str, Any] | None = None
+    logs: list[str] = Field(default_factory=list)
+    status_reason: str | None = None
     updated_at: datetime
 
 
@@ -172,6 +175,7 @@ class TaskResponse(BaseModel):
         confidence: float,
         risk_flags: list[str],
         requires_user_approval: bool,
+        delegation_result: dict[str, Any] | None = None,
     ) -> "TaskResponse":
         return cls(
             request_id=task_request.request_id,
@@ -184,6 +188,7 @@ class TaskResponse(BaseModel):
                 task_request=task_request,
                 plan=plan,
                 requires_user_approval=requires_user_approval,
+                delegation_result=delegation_result,
             ),
             confidence=confidence,
             risk_flags=risk_flags,
@@ -240,7 +245,10 @@ def build_waiting_for_input_state(task_request: TaskRequest) -> WorkflowState:
 
 
 def build_planned_workflow_state(
-    task_request: TaskRequest, plan: list[WorkflowPlanStep], requires_user_approval: bool
+    task_request: TaskRequest,
+    plan: list[WorkflowPlanStep],
+    requires_user_approval: bool,
+    delegation_result: dict[str, Any] | None = None,
 ) -> WorkflowState:
     now = utc_now()
     next_step_id = plan[0].step_id if plan else None
@@ -300,25 +308,52 @@ def build_planned_workflow_state(
             )
         )
 
+    if delegation_result:
+        lifecycle_status = delegation_result["lifecycle_status"]
+        current_stage = delegation_result["current_stage"]
+        waiting_step_ids = delegation_result["waiting_step_ids"]
+        next_step_id = delegation_result["next_step_id"]
+        decision_history.append(
+            build_decision_record(
+                decision_id=f"DEC-{len(decision_history) + 1}",
+                decision_type=WorkflowDecisionType.STATE_TRANSITION,
+                summary="Workflow delegation executed against specialist steps.",
+                actor="Supervisor",
+                previous_status=WorkflowLifecycleStatus.PLANNED,
+                new_status=lifecycle_status,
+                created_at=now,
+                related_step_id=delegation_result["last_completed_step_id"],
+            )
+        )
+
     return WorkflowState(
         request_id=task_request.request_id,
         source=task_request.source,
         workflow_id=build_workflow_id(task_request.request_id),
         current_stage=current_stage,
         lifecycle_status=lifecycle_status,
-        plan_steps=build_step_states(plan=plan, updated_at=now),
+        plan_steps=delegation_result["step_states"] if delegation_result else build_step_states(plan=plan, updated_at=now),
         decision_history=decision_history,
         resume_data=WorkflowResumeData(
-            checkpoint_id=f"{task_request.request_id}:checkpoint:planning",
-            resume_token=f"{task_request.request_id}:resume:planning",
-            last_completed_step_id=None,
+            checkpoint_id=f"{task_request.request_id}:checkpoint:delegation"
+            if delegation_result
+            else f"{task_request.request_id}:checkpoint:planning",
+            resume_token=f"{task_request.request_id}:resume:delegation"
+            if delegation_result
+            else f"{task_request.request_id}:resume:planning",
+            last_completed_step_id=delegation_result["last_completed_step_id"]
+            if delegation_result
+            else None,
             next_step_id=next_step_id,
-            delegated_step_ids=[],
+            delegated_step_ids=delegation_result["delegated_step_ids"]
+            if delegation_result
+            else [],
             waiting_step_ids=waiting_step_ids,
         ),
         timestamps=build_planned_timestamps(
             now=now,
             requires_user_approval=requires_user_approval,
+            delegation_result=delegation_result,
         ),
     )
 
@@ -345,13 +380,27 @@ def build_step_states(
 
 
 def build_planned_timestamps(
-    now: datetime, requires_user_approval: bool
+    now: datetime,
+    requires_user_approval: bool,
+    delegation_result: dict[str, Any] | None = None,
 ) -> WorkflowTimestamps:
     return WorkflowTimestamps(
         received_at=now,
         updated_at=now,
         planned_at=now,
-        waiting_for_approval_at=now if requires_user_approval else None,
+        delegated_at=delegation_result["delegated_at"] if delegation_result else None,
+        waiting_for_results_at=(
+            delegation_result["waiting_for_results_at"] if delegation_result else None
+        ),
+        waiting_for_approval_at=(
+            now
+            if requires_user_approval
+            else delegation_result["waiting_for_approval_at"]
+            if delegation_result and "waiting_for_approval_at" in delegation_result
+            else None
+        ),
+        completed_at=delegation_result["completed_at"] if delegation_result else None,
+        blocked_at=delegation_result["blocked_at"] if delegation_result else None,
     )
 
 

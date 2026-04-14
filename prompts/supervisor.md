@@ -50,7 +50,11 @@ Output rules:
 - return only valid JSON,
 - do not wrap JSON in markdown,
 - the top-level object must include exactly: `plan`, `confidence`, `risk_flags`, `requires_user_approval`,
-- each plan step must include: `step_id`, `owner_agent`, `task_description`, `step_order`, `depends_on`, `required_input_context`, `expected_result`, `status`, `risk_flags`, `requires_user_approval`,
+- each plan step must include: `step_id`, `owner_agent`, `task_description`, `agent_instruction`, `step_order`, `depends_on`, `expected_output_json_format`, `start_conditions`, `result_handoff_condition`, `required_input_context`, `expected_result`, `status`, `risk_flags`, `requires_user_approval`,
 - use only these agent names: `DeploymentAgent`, `InfraAgent`, `CI_CD_Agent`, `Risk/Policy Agent`, `Human Review Interface`,
 - `confidence` must be a float between `0.0` and `1.0`,
-- ensure `step_order` values are sequential and dependencies refer only to earlier step ids.
+- ensure `step_order` values are sequential and dependencies refer only to earlier step ids,
+- `agent_instruction` must be a concise instruction for the owning specialist and must explicitly say to return JSON only,
+- `expected_output_json_format` must be a JSON object that describes the exact response shape expected from that step,
+- `start_conditions` must be a list of concrete conditions that determine when the step can begin,
+- `result_handoff_condition` must state when the step output is ready to hand off to the next stage.

@@ -2,10 +2,21 @@ import unittest
 
 from agents.supervisor import run_supervisor_agent
 from contracts.task_request import InputStatus, OperationType, TaskRequest, TargetEnvironment
-from contracts.task_response import SpecialistAgentName, WorkflowStepStatus
+from contracts.task_response import (
+    SpecialistAgentName,
+    WorkflowLifecycleStatus,
+    WorkflowStepStatus,
+)
+from settings.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
 
 class TaskRequestParsingTests(unittest.TestCase):
+    def test_supervisor_prompt_matches_required_plan_fields(self) -> None:
+        self.assertIn("agent_instruction", SUPERVISOR_SYSTEM_PROMPT)
+        self.assertIn("expected_output_json_format", SUPERVISOR_SYSTEM_PROMPT)
+        self.assertIn("start_conditions", SUPERVISOR_SYSTEM_PROMPT)
+        self.assertIn("result_handoff_condition", SUPERVISOR_SYSTEM_PROMPT)
+
     def test_builds_standardized_work_item_from_user_request(self) -> None:
         task_request = TaskRequest.model_validate(
             {
@@ -60,6 +71,14 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertIn("standardized_work_item.target_environment", field_names)
         self.assertIn("standardized_work_item.operation_type", field_names)
 
+        response = run_supervisor_agent(task_request=task_request)
+        self.assertEqual(response.state.lifecycle_status, WorkflowLifecycleStatus.NEEDS_CLARIFICATION)
+        self.assertEqual(response.state.request_id, "req-102")
+        self.assertEqual(response.state.source.value, "chat")
+        self.assertEqual(len(response.state.decision_history), 2)
+        self.assertIsNotNone(response.state.timestamps.received_at)
+        self.assertIsNotNone(response.state.timestamps.clarification_requested_at)
+
     def test_supports_legacy_payload_mapping(self) -> None:
         task_request = TaskRequest.model_validate(
             {
@@ -111,6 +130,12 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertEqual(response.status.value, "planned")
         self.assertFalse(response.requires_user_approval)
         self.assertEqual(len(response.plan), 7)
+        self.assertEqual(response.state.lifecycle_status, WorkflowLifecycleStatus.PLANNED)
+        self.assertEqual(response.state.current_stage.value, "delegation")
+        self.assertEqual(len(response.state.plan_steps), len(response.plan))
+        self.assertEqual(response.state.resume_data.next_step_id, "STEP-1")
+        self.assertEqual(response.state.resume_data.checkpoint_id, "req-104:checkpoint:planning")
+        self.assertEqual(response.state.decision_history[-1].decision_id, "DEC-3")
         self.assertEqual(
             [step.owner_agent for step in response.plan[:3]],
             [
@@ -156,6 +181,13 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertIn("production_change", response.risk_flags)
         self.assertIn("explicit_approval_required", response.risk_flags)
         self.assertEqual(len(response.plan), 8)
+        self.assertEqual(
+            response.state.lifecycle_status,
+            WorkflowLifecycleStatus.WAITING_FOR_APPROVAL,
+        )
+        self.assertEqual(response.state.current_stage.value, "human_review")
+        self.assertIn("STEP-6", response.state.resume_data.waiting_step_ids)
+        self.assertIsNotNone(response.state.timestamps.waiting_for_approval_at)
         approval_step = response.plan[5]
         execution_step = response.plan[6]
         self.assertEqual(

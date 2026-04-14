@@ -235,13 +235,65 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
     }
   ],
   "state": {
+    "request_id": "req-001",
+    "source": "jira",
     "workflow_id": "workflow-req-001",
-    "current_stage": "risk_review",
-    "workflow_status": "planning_completed",
-    "checkpoint_id": "req-001:checkpoint:planning",
-    "resume_token": "req-001:resume:planning",
-    "last_completed_step_id": null,
-    "next_step_id": "STEP-1"
+    "current_stage": "delegation",
+    "lifecycle_status": "planned",
+    "plan_steps": [
+      {
+        "step_id": "STEP-1",
+        "step_order": 1,
+        "owner_agent": "DeploymentAgent",
+        "task_description": "Prepare deployment rollout for billing-api on stage.",
+        "status": "planned",
+        "depends_on": [],
+        "updated_at": "2026-04-14T10:00:00Z"
+      }
+    ],
+    "decision_history": [
+      {
+        "decision_id": "DEC-1",
+        "decision_type": "state_transition",
+        "summary": "Request received by Supervisor.",
+        "actor": "Supervisor",
+        "related_step_id": null,
+        "previous_status": null,
+        "new_status": "received",
+        "created_at": "2026-04-14T10:00:00Z"
+      },
+      {
+        "decision_id": "DEC-2",
+        "decision_type": "plan_created",
+        "summary": "Workflow plan created and stored in state.",
+        "actor": "Supervisor",
+        "related_step_id": null,
+        "previous_status": "received",
+        "new_status": "planned",
+        "created_at": "2026-04-14T10:00:00Z"
+      }
+    ],
+    "resume_data": {
+      "checkpoint_id": "req-001:checkpoint:planning",
+      "resume_token": "req-001:resume:planning",
+      "last_completed_step_id": null,
+      "next_step_id": "STEP-1",
+      "delegated_step_ids": [],
+      "waiting_step_ids": []
+    },
+    "timestamps": {
+      "received_at": "2026-04-14T10:00:00Z",
+      "updated_at": "2026-04-14T10:00:00Z",
+      "clarification_requested_at": null,
+      "planned_at": "2026-04-14T10:00:00Z",
+      "delegated_at": null,
+      "waiting_for_results_at": null,
+      "waiting_for_approval_at": null,
+      "executing_at": null,
+      "completed_at": null,
+      "failed_at": null,
+      "blocked_at": null
+    }
   },
   "confidence": 0.92,
   "risk_flags": [],
@@ -260,9 +312,11 @@ Znaczenie dodatkowych pól:
 - `plan[*].required_input_context`: kontekst wejściowy wymagany przez agenta odpowiedzialnego za krok.
 - `plan[*].expected_result`: oczekiwany rezultat kroku przekazywany dalej do agregacji.
 - `plan[*].status`: status kroku na końcu etapu planowania.
-- `state.workflow_id`: trwały identyfikator workflow.
-- `state.checkpoint_id`: identyfikator checkpointu zapisywanego po planowaniu.
-- `state.resume_token`: identyfikator potrzebny do wznowienia procesu od zapisanego checkpointu.
+- `state.lifecycle_status`: aktualny status lifecycle zadania. Obsługiwane wartości to `received`, `needs_clarification`, `planned`, `delegated`, `waiting_for_results`, `waiting_for_approval`, `executing`, `completed`, `failed`, `blocked`.
+- `state.plan_steps`: runtime'owa lista kroków wraz z bieżącym statusem każdego kroku.
+- `state.decision_history`: historia decyzji i przejść stanu wykonywana przez Supervisora.
+- `state.resume_data`: dane potrzebne do wznowienia workflow od zapisanego checkpointu.
+- `state.timestamps`: znaczniki czasu dla kluczowych etapów lifecycle zadania.
 - `confidence`: ocena pewności planu zwrócona przez Supervisora.
 - `risk_flags`: zagregowane flagi ryzyka dla całego workflow.
 - `requires_user_approval`: informacja, czy workflow powinien zatrzymać się na bramce akceptacji użytkownika.

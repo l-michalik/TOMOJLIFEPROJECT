@@ -35,10 +35,26 @@ Start the API server:
 uv run uvicorn api.app:app --reload
 ```
 
+During request handling the API writes runtime workflow logs to the server process output. The logs include request receipt, clarification gating, deepagents planning start/end, fallback activation, and planning completion status.
+
 Healthcheck:
 
 ```bash
 curl http://127.0.0.1:8000/health
+```
+
+## Run tests
+
+Run the full test suite:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+Run a single test module:
+
+```bash
+uv run python -m unittest tests/test_task_request.py -v
 ```
 
 Basic request:
@@ -48,16 +64,15 @@ curl -X POST http://127.0.0.1:8000/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "request_id": "req-001",
-    "source": "jira",
+    "source": "api",
     "user_id": "platform-engineer",
-    "user_request": "Deploy billing-api to the stage environment",
+    "user_request": "Deploy billing-api to stage version 2026.04.14 without downtime",
     "params": {
-      "target_environment": "stage",
       "priority": "medium",
-      "ticket_id": "OPS-123",
-      "conversation_id": null,
+      "target_environment": "stage",
       "execution_options": {
-        "service_name": "billing-api"
+        "service_name": "billing-api",
+        "release_version": "2026.04.14"
       }
     }
   }'
@@ -68,7 +83,7 @@ If required planning data is missing, the API returns `status: "needs_clarificat
 If planning succeeds, the API returns `status: "planned"` and a contract that includes:
 
 - `plan`: ordered workflow steps with assigned target agent, step instruction, expected JSON response format, start conditions, dependencies, aggregation handoff condition, required context, expected result, step status, risk flags, and approval requirement,
-- `state`: workflow identifiers and checkpoint/resume metadata needed for persistence and restart,
+- `state`: full workflow lifecycle state with request metadata, current stage, lifecycle status, step states, decision history, checkpoint/resume data, and timestamps,
 - `confidence`: supervisor confidence score for the plan,
 - `risk_flags`: aggregated workflow-level risk signals,
 - `requires_user_approval`: workflow-level approval flag.

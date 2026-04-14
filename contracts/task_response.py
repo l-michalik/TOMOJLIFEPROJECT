@@ -1,9 +1,10 @@
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from contracts.task_request import ClarificationItem, TaskRequest
+from contracts.task_request import ClarificationItem, RequestSource, TaskRequest
 
 
 class SupervisorResponseStatus(str, Enum):
@@ -13,23 +14,47 @@ class SupervisorResponseStatus(str, Enum):
 
 class WorkflowStepStatus(str, Enum):
     PLANNED = "planned"
+    DELEGATED = "delegated"
+    WAITING_FOR_RESULTS = "waiting_for_results"
     WAITING_FOR_APPROVAL = "waiting_for_approval"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
     BLOCKED = "blocked"
 
 
-class WorkflowOverallStatus(str, Enum):
-    PLANNING_COMPLETED = "planning_completed"
-    WAITING_FOR_INPUT = "waiting_for_input"
+class WorkflowLifecycleStatus(str, Enum):
+    RECEIVED = "received"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    PLANNED = "planned"
+    DELEGATED = "delegated"
+    WAITING_FOR_RESULTS = "waiting_for_results"
     WAITING_FOR_APPROVAL = "waiting_for_approval"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
 
 
 class WorkflowStage(str, Enum):
+    RECEIVED = "received"
     INPUT_VALIDATION = "input_validation"
     PLANNING = "planning"
+    DELEGATION = "delegation"
+    SPECIALIST_ANALYSIS = "specialist_analysis"
     RISK_REVIEW = "risk_review"
     HUMAN_REVIEW = "human_review"
     EXECUTION = "execution"
     FINALIZATION = "finalization"
+    COMPLETED = "completed"
+
+
+class WorkflowDecisionType(str, Enum):
+    STATE_TRANSITION = "state_transition"
+    CLARIFICATION_REQUESTED = "clarification_requested"
+    PLAN_CREATED = "plan_created"
+    APPROVAL_REQUIRED = "approval_required"
+    POLICY_REVIEW_PENDING = "policy_review_pending"
 
 
 class SpecialistAgentName(str, Enum):
@@ -58,14 +83,60 @@ class WorkflowPlanStep(BaseModel):
     requires_user_approval: bool = False
 
 
-class WorkflowState(BaseModel):
-    workflow_id: str
-    current_stage: WorkflowStage
-    workflow_status: WorkflowOverallStatus
+class WorkflowStepState(BaseModel):
+    step_id: str
+    step_order: int
+    owner_agent: SpecialistAgentName
+    task_description: str
+    status: WorkflowStepStatus
+    depends_on: list[str] = Field(default_factory=list)
+    updated_at: datetime
+
+
+class WorkflowDecisionRecord(BaseModel):
+    decision_id: str
+    decision_type: WorkflowDecisionType
+    summary: str
+    actor: str
+    related_step_id: str | None = None
+    previous_status: WorkflowLifecycleStatus | None = None
+    new_status: WorkflowLifecycleStatus
+    created_at: datetime
+
+
+class WorkflowResumeData(BaseModel):
     checkpoint_id: str
     resume_token: str
     last_completed_step_id: str | None = None
     next_step_id: str | None = None
+    delegated_step_ids: list[str] = Field(default_factory=list)
+    waiting_step_ids: list[str] = Field(default_factory=list)
+
+
+class WorkflowTimestamps(BaseModel):
+    received_at: datetime
+    updated_at: datetime
+    clarification_requested_at: datetime | None = None
+    planned_at: datetime | None = None
+    delegated_at: datetime | None = None
+    waiting_for_results_at: datetime | None = None
+    waiting_for_approval_at: datetime | None = None
+    executing_at: datetime | None = None
+    completed_at: datetime | None = None
+    failed_at: datetime | None = None
+    blocked_at: datetime | None = None
+
+
+class WorkflowState(BaseModel):
+    request_id: str
+    source: RequestSource
+    workflow_id: str
+    current_stage: WorkflowStage
+    lifecycle_status: WorkflowLifecycleStatus
+    plan_steps: list[WorkflowStepState] = Field(default_factory=list)
+    decision_history: list[WorkflowDecisionRecord] = Field(default_factory=list)
+    resume_data: WorkflowResumeData
+    timestamps: WorkflowTimestamps
 
 
 class TaskResponse(BaseModel):
@@ -88,7 +159,7 @@ class TaskResponse(BaseModel):
             status=SupervisorResponseStatus.NEEDS_CLARIFICATION,
             validation_errors=task_request.clarification_items,
             normalized_request=task_request.model_dump(mode="json"),
-            state=build_waiting_for_input_state(task_request.request_id),
+            state=build_waiting_for_input_state(task_request),
             answer=build_clarification_message(task_request=task_request),
         )
 
@@ -110,7 +181,7 @@ class TaskResponse(BaseModel):
             model=model,
             plan=plan,
             state=build_planned_workflow_state(
-                request_id=task_request.request_id,
+                task_request=task_request,
                 plan=plan,
                 requires_user_approval=requires_user_approval,
             ),
@@ -127,40 +198,196 @@ class PlannedSupervisorOutput(BaseModel):
     requires_user_approval: bool = False
 
 
-def build_waiting_for_input_state(request_id: str) -> WorkflowState:
+def build_waiting_for_input_state(task_request: TaskRequest) -> WorkflowState:
+    now = utc_now()
     return WorkflowState(
-        workflow_id=build_workflow_id(request_id),
+        request_id=task_request.request_id,
+        source=task_request.source,
+        workflow_id=build_workflow_id(task_request.request_id),
         current_stage=WorkflowStage.INPUT_VALIDATION,
-        workflow_status=WorkflowOverallStatus.WAITING_FOR_INPUT,
-        checkpoint_id=f"{request_id}:checkpoint:input-validation",
-        resume_token=f"{request_id}:resume:input-validation",
+        lifecycle_status=WorkflowLifecycleStatus.NEEDS_CLARIFICATION,
+        plan_steps=[],
+        decision_history=[
+            build_decision_record(
+                decision_id="DEC-1",
+                decision_type=WorkflowDecisionType.STATE_TRANSITION,
+                summary="Request received by Supervisor.",
+                actor="Supervisor",
+                previous_status=None,
+                new_status=WorkflowLifecycleStatus.RECEIVED,
+                created_at=now,
+            ),
+            build_decision_record(
+                decision_id="DEC-2",
+                decision_type=WorkflowDecisionType.CLARIFICATION_REQUESTED,
+                summary="Request requires clarification before planning.",
+                actor="Supervisor",
+                previous_status=WorkflowLifecycleStatus.RECEIVED,
+                new_status=WorkflowLifecycleStatus.NEEDS_CLARIFICATION,
+                created_at=now,
+            ),
+        ],
+        resume_data=WorkflowResumeData(
+            checkpoint_id=f"{task_request.request_id}:checkpoint:input-validation",
+            resume_token=f"{task_request.request_id}:resume:input-validation",
+        ),
+        timestamps=WorkflowTimestamps(
+            received_at=now,
+            updated_at=now,
+            clarification_requested_at=now,
+        ),
     )
 
 
 def build_planned_workflow_state(
-    request_id: str, plan: list[WorkflowPlanStep], requires_user_approval: bool
+    task_request: TaskRequest, plan: list[WorkflowPlanStep], requires_user_approval: bool
 ) -> WorkflowState:
+    now = utc_now()
     next_step_id = plan[0].step_id if plan else None
-    workflow_status = WorkflowOverallStatus.PLANNING_COMPLETED
-    current_stage = WorkflowStage.RISK_REVIEW
+    lifecycle_status = WorkflowLifecycleStatus.PLANNED
+    current_stage = WorkflowStage.PLANNING
+    decision_history = [
+        build_decision_record(
+            decision_id="DEC-1",
+            decision_type=WorkflowDecisionType.STATE_TRANSITION,
+            summary="Request received by Supervisor.",
+            actor="Supervisor",
+            previous_status=None,
+            new_status=WorkflowLifecycleStatus.RECEIVED,
+            created_at=now,
+        ),
+        build_decision_record(
+            decision_id="DEC-2",
+            decision_type=WorkflowDecisionType.PLAN_CREATED,
+            summary="Workflow plan created and stored in state.",
+            actor="Supervisor",
+            previous_status=WorkflowLifecycleStatus.RECEIVED,
+            new_status=WorkflowLifecycleStatus.PLANNED,
+            created_at=now,
+        ),
+    ]
+    waiting_step_ids = [step.step_id for step in plan if step.status != WorkflowStepStatus.PLANNED]
 
     if requires_user_approval:
-        workflow_status = WorkflowOverallStatus.WAITING_FOR_APPROVAL
+        lifecycle_status = WorkflowLifecycleStatus.WAITING_FOR_APPROVAL
         current_stage = WorkflowStage.HUMAN_REVIEW
+        decision_history.append(
+            build_decision_record(
+                decision_id="DEC-3",
+                decision_type=WorkflowDecisionType.APPROVAL_REQUIRED,
+                summary="Workflow paused pending human approval.",
+                actor="Supervisor",
+                previous_status=WorkflowLifecycleStatus.PLANNED,
+                new_status=WorkflowLifecycleStatus.WAITING_FOR_APPROVAL,
+                created_at=now,
+                related_step_id=find_first_step_id_by_status(
+                    plan=plan,
+                    target_status=WorkflowStepStatus.WAITING_FOR_APPROVAL,
+                ),
+            )
+        )
+    else:
+        current_stage = WorkflowStage.DELEGATION
+        decision_history.append(
+            build_decision_record(
+                decision_id="DEC-3",
+                decision_type=WorkflowDecisionType.POLICY_REVIEW_PENDING,
+                summary="Workflow is planned and ready for delegation and result collection.",
+                actor="Supervisor",
+                previous_status=WorkflowLifecycleStatus.PLANNED,
+                new_status=WorkflowLifecycleStatus.PLANNED,
+                created_at=now,
+            )
+        )
 
     return WorkflowState(
-        workflow_id=build_workflow_id(request_id),
+        request_id=task_request.request_id,
+        source=task_request.source,
+        workflow_id=build_workflow_id(task_request.request_id),
         current_stage=current_stage,
-        workflow_status=workflow_status,
-        checkpoint_id=f"{request_id}:checkpoint:planning",
-        resume_token=f"{request_id}:resume:planning",
-        last_completed_step_id=None,
-        next_step_id=next_step_id,
+        lifecycle_status=lifecycle_status,
+        plan_steps=build_step_states(plan=plan, updated_at=now),
+        decision_history=decision_history,
+        resume_data=WorkflowResumeData(
+            checkpoint_id=f"{task_request.request_id}:checkpoint:planning",
+            resume_token=f"{task_request.request_id}:resume:planning",
+            last_completed_step_id=None,
+            next_step_id=next_step_id,
+            delegated_step_ids=[],
+            waiting_step_ids=waiting_step_ids,
+        ),
+        timestamps=build_planned_timestamps(
+            now=now,
+            requires_user_approval=requires_user_approval,
+        ),
     )
 
 
 def build_workflow_id(request_id: str) -> str:
     return f"workflow-{request_id}"
+
+
+def build_step_states(
+    plan: list[WorkflowPlanStep], updated_at: datetime
+) -> list[WorkflowStepState]:
+    return [
+        WorkflowStepState(
+            step_id=step.step_id,
+            step_order=step.step_order,
+            owner_agent=step.owner_agent,
+            task_description=step.task_description,
+            status=step.status,
+            depends_on=step.depends_on,
+            updated_at=updated_at,
+        )
+        for step in plan
+    ]
+
+
+def build_planned_timestamps(
+    now: datetime, requires_user_approval: bool
+) -> WorkflowTimestamps:
+    return WorkflowTimestamps(
+        received_at=now,
+        updated_at=now,
+        planned_at=now,
+        waiting_for_approval_at=now if requires_user_approval else None,
+    )
+
+
+def build_decision_record(
+    decision_id: str,
+    decision_type: WorkflowDecisionType,
+    summary: str,
+    actor: str,
+    previous_status: WorkflowLifecycleStatus | None,
+    new_status: WorkflowLifecycleStatus,
+    created_at: datetime,
+    related_step_id: str | None = None,
+) -> WorkflowDecisionRecord:
+    return WorkflowDecisionRecord(
+        decision_id=decision_id,
+        decision_type=decision_type,
+        summary=summary,
+        actor=actor,
+        related_step_id=related_step_id,
+        previous_status=previous_status,
+        new_status=new_status,
+        created_at=created_at,
+    )
+
+
+def find_first_step_id_by_status(
+    plan: list[WorkflowPlanStep], target_status: WorkflowStepStatus
+) -> str | None:
+    for step in plan:
+        if step.status == target_status:
+            return step.step_id
+    return None
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def build_clarification_message(task_request: TaskRequest) -> str:

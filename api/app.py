@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from agents.supervisor import run_supervisor_agent
 from contracts.task_request import TaskRequest
 from contracts.task_response import TaskResponse
+from utils.workflow_logging import configure_application_logging
 
 load_dotenv()
+configure_application_logging()
 
 app = FastAPI(title="TOMOJLIFEPROJECT API")
 

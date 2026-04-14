@@ -15,8 +15,11 @@ from utils.supervisor import (
     read_last_message_text,
     sort_plan_steps,
 )
+from utils.workflow_logging import get_application_logger, log_ai_request
 from utils.workflow_plan_builder import build_workflow_plan
 from utils.workflow_risk import assess_workflow_risk, build_workflow_confidence
+
+logger = get_application_logger("agents.supervisor")
 
 
 def create_supervisor_agent(model: str | None = None):
@@ -40,7 +43,7 @@ def run_supervisor_agent(
         model=selected_model,
     )
     risk_assessment = assess_workflow_risk(task_request)
-    return TaskResponse.from_planned_task(
+    response = TaskResponse.from_planned_task(
         task_request=task_request,
         model=selected_model,
         plan=sort_plan_steps(planned_output["plan"]),
@@ -48,19 +51,27 @@ def run_supervisor_agent(
         risk_flags=planned_output["risk_flags"] or risk_assessment.risk_flags,
         requires_user_approval=planned_output["requires_user_approval"],
     )
+    return response
 
 
 def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
     if not os.getenv("OPENAI_API_KEY"):
         return build_fallback_planning_result(task_request)
 
+    prompt = task_request.to_prompt()
+    log_ai_request(
+        logger,
+        request_id=task_request.request_id,
+        model=model,
+        prompt=prompt,
+    )
     agent = create_supervisor_agent(model=model)
     result = agent.invoke(
         {
             "messages": [
                 {
                     "role": "user",
-                    "content": task_request.to_prompt(),
+                    "content": prompt,
                 }
             ]
         }
@@ -71,7 +82,6 @@ def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
         planned_output = parse_planned_supervisor_output(raw_text=raw_text)
     except Exception:
         return build_fallback_planning_result(task_request)
-
     return {
         "plan": planned_output.plan,
         "confidence": planned_output.confidence,

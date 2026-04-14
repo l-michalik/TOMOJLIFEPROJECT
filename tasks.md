@@ -1,6 +1,6 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents opanowalem ją na poziomie senior developera
 
-Wykonaj zadanie : <Przygotować strukturę wyjściową zwracaną przez Supervisora po etapie planowania. Kontrakt musi zawierać plan jako listę kroków z przypisanym agentem, opisem taska, kolejnością, zależnościami, wymaganym kontekstem wejściowym, oczekiwanym rezultatem i statusem kroku, a także obiekt state przechowujący stan workflow. Dodatkowo należy uwzględnić pole confidence, flagi ryzyka, informację o wymaganej akceptacji użytkownika oraz identyfikatory potrzebne do checkpointingu i wznowienia procesu.>
+Wykonaj zadanie : <Zaprojektować i zaimplementować obiekt state przechowujący pełny lifecycle zadania. Stan powinien zawierać identyfikator requestu, źródło zgłoszenia, aktualny etap workflow, listę kroków planu, status każdego kroku, historię decyzji, dane potrzebne do ponownego uruchomienia oraz znaczniki czasu. Należy przewidzieć stany co najmniej: received, needs_clarification, planned, delegated, waiting_for_results, waiting_for_approval, executing, completed, failed i blocked.>
 
 Zasady developmentu
 - Każdy plik z kodem nie może przekraczać 500 linii, z wyjątkiem plików Markdown. Rozwiązanie należy implementować w możliwie najprostszy sposób, minimalizując złożoność oraz unikając nadmiernej abstrakcji i przedwczesnej optymalizacji.

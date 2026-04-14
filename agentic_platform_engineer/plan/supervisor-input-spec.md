@@ -22,6 +22,8 @@ This specification covers the normalized input model handled by the `Supervisor`
 
 It does not define transport-specific webhook payloads or integration-specific adapters.
 
+This specification also assumes an intake transformation step that converts the normalized request into a standardized working object for planning.
+
 ## 3. Design Principles
 
 - The input contract must be explicit and type-driven.
@@ -221,6 +223,28 @@ Supported fields:
 
 All `context` fields are optional.
 
+## 6.1 Derived Working Object
+
+After normalization, the intake layer may derive a standardized working object for planning.
+
+The working object should preserve the normalized request identity and add planning-oriented fields extracted from the request content and structured params.
+
+Recommended fields:
+
+- `service_name`: target service identifier when the task concerns an application or pipeline scope
+- `target_environment`: final environment selected for the request
+- `operation_type`: normalized operation such as deploy, rollback, infrastructure change, infrastructure provision, pipeline run, or pipeline validation
+- `execution_params`: structured execution details such as version, region, rollout mode, or change window
+- `constraints`: explicit execution constraints extracted from the request, such as no-downtime or time-window restrictions
+
+The intake layer may populate these fields from:
+
+- structured `params`
+- structured `execution_params`
+- direct extraction from `user_request` when the value is stated explicitly
+
+The intake layer must not invent missing business values that are not clearly present in the request.
+
 ## 7. Intake Status and Clarification Marking
 
 ## 7.1 Purpose
@@ -269,6 +293,11 @@ A request must be marked as `needs_clarification` if at least one required field
 - `params`
 - `params.target_environment`
 - `params.priority`
+
+The derived working object must also be marked as `needs_clarification` if planning-critical fields cannot be determined, especially:
+
+- `operation_type`
+- `service_name` for deployment-oriented or CI-oriented tasks
 
 The request must also be marked as `needs_clarification` if:
 

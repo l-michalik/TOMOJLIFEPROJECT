@@ -1,0 +1,2 @@
+"""Kontrakty danych projektu."""
+

@@ -2,6 +2,7 @@ import unittest
 from threading import Lock
 from time import sleep
 
+from contracts.agent_input import AgentTaskType
 from contracts.task_request import TaskRequest
 from contracts.task_response import (
     SpecialistAgentName,
@@ -63,6 +64,7 @@ class WorkflowDelegationTests(unittest.TestCase):
             WorkflowPlanStep(
                 step_id="STEP-1",
                 owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+                task_type=AgentTaskType.DEPLOYMENT_ANALYSIS,
                 task_description="Analyze deployment prerequisites.",
                 agent_instruction="Return JSON.",
                 step_order=1,
@@ -77,6 +79,7 @@ class WorkflowDelegationTests(unittest.TestCase):
             WorkflowPlanStep(
                 step_id="STEP-2",
                 owner_agent=SpecialistAgentName.INFRA_AGENT,
+                task_type=AgentTaskType.INFRASTRUCTURE_ANALYSIS,
                 task_description="Analyze infrastructure dependencies.",
                 agent_instruction="Return JSON.",
                 step_order=2,
@@ -280,6 +283,7 @@ def build_parallel_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-1",
             owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_type=AgentTaskType.DEPLOYMENT_ANALYSIS,
             task_description="Analyze deployment prerequisites.",
             agent_instruction="Return JSON.",
             step_order=1,
@@ -294,6 +298,7 @@ def build_parallel_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-2",
             owner_agent=SpecialistAgentName.INFRA_AGENT,
+            task_type=AgentTaskType.INFRASTRUCTURE_ANALYSIS,
             task_description="Analyze infrastructure dependencies.",
             agent_instruction="Return JSON.",
             step_order=2,
@@ -308,6 +313,7 @@ def build_parallel_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-3",
             owner_agent=SpecialistAgentName.CI_CD_AGENT,
+            task_type=AgentTaskType.CI_CD_ANALYSIS,
             task_description="Analyze pipeline impact.",
             agent_instruction="Return JSON.",
             step_order=3,
@@ -322,6 +328,7 @@ def build_parallel_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-4",
             owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_type=AgentTaskType.SERVICE_ROLLOUT,
             task_description="Prepare rollout strategy.",
             agent_instruction="Return JSON.",
             step_order=4,
@@ -341,6 +348,7 @@ def build_policy_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-1",
             owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_type=AgentTaskType.DEPLOYMENT_ANALYSIS,
             task_description="Analyze deployment prerequisites.",
             agent_instruction="Return JSON.",
             step_order=1,
@@ -355,6 +363,7 @@ def build_policy_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-2",
             owner_agent=SpecialistAgentName.RISK_POLICY_AGENT,
+            task_type=AgentTaskType.RISK_POLICY_REVIEW,
             task_description="Review proposed actions against policy.",
             agent_instruction="Return JSON.",
             step_order=2,
@@ -374,6 +383,7 @@ def build_policy_test_plan() -> list[WorkflowPlanStep]:
         WorkflowPlanStep(
             step_id="STEP-3",
             owner_agent=SpecialistAgentName.EXECUTION_AGENT,
+            task_type=AgentTaskType.EXECUTION_HANDOFF,
             task_description="Prepare approved actions for execution.",
             agent_instruction="Return JSON.",
             step_order=3,

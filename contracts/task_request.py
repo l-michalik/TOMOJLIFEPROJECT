@@ -219,6 +219,7 @@ class TaskRequest(BaseModel):
             "    {\n"
             '      "step_id": "STEP-1",\n'
             '      "owner_agent": "DeploymentAgent|InfraAgent|CI_CD_Agent|Risk/Policy Agent|Human Review Interface",\n'
+            '      "task_type": "deployment_analysis|infrastructure_analysis|ci_cd_analysis|service_rollout|environment_change|pipeline_procedure|diagnostic_plan|risk_policy_review|human_approval|execution_handoff|final_report",\n'
             '      "task_description": "string",\n'
             '      "step_order": 1,\n'
             '      "depends_on": ["STEP-0"],\n'

@@ -1,6 +1,7 @@
 import unittest
 
 from agents.supervisor import checkpoint_store, resume_supervisor_workflow, run_supervisor_agent
+from contracts.agent_input import AgentTaskType
 from contracts.task_request import InputStatus, OperationType, TaskRequest, TargetEnvironment
 from contracts.task_response import (
     SpecialistAgentName,
@@ -18,6 +19,7 @@ class TaskRequestParsingTests(unittest.TestCase):
 
     def test_supervisor_prompt_matches_required_plan_fields(self) -> None:
         self.assertIn("agent_instruction", SUPERVISOR_SYSTEM_PROMPT)
+        self.assertIn("task_type", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("expected_output_json_format", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("start_conditions", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("result_handoff_condition", SUPERVISOR_SYSTEM_PROMPT)
@@ -151,17 +153,24 @@ class TaskRequestParsingTests(unittest.TestCase):
             ],
         )
         self.assertEqual(response.plan[3].owner_agent, SpecialistAgentName.DEPLOYMENT_AGENT)
+        self.assertEqual(response.plan[0].task_type, AgentTaskType.DEPLOYMENT_ANALYSIS)
+        self.assertEqual(response.plan[1].task_type, AgentTaskType.INFRASTRUCTURE_ANALYSIS)
+        self.assertEqual(response.plan[2].task_type, AgentTaskType.CI_CD_ANALYSIS)
+        self.assertEqual(response.plan[3].task_type, AgentTaskType.SERVICE_ROLLOUT)
         self.assertTrue(response.plan[0].agent_instruction)
         self.assertIn("proposed_actions", response.plan[0].expected_output_json_format)
         self.assertTrue(response.plan[0].start_conditions)
         self.assertTrue(response.plan[0].result_handoff_condition)
+        self.assertEqual(response.plan[4].task_type, AgentTaskType.RISK_POLICY_REVIEW)
         self.assertEqual(response.plan[4].owner_agent, SpecialistAgentName.RISK_POLICY_AGENT)
+        self.assertEqual(response.plan[5].task_type, AgentTaskType.EXECUTION_HANDOFF)
         self.assertEqual(response.plan[5].owner_agent, SpecialistAgentName.EXECUTION_AGENT)
         self.assertEqual(response.plan[5].status, WorkflowStepStatus.COMPLETED)
         self.assertEqual(
             response.plan[6].owner_agent,
             SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
         )
+        self.assertEqual(response.plan[6].task_type, AgentTaskType.FINAL_REPORT)
         self.assertTrue(all(step.status == WorkflowStepStatus.COMPLETED for step in response.plan))
         self.assertEqual(len(response.state.resume_data.delegated_step_ids), 7)
         self.assertIsNotNone(response.state.timestamps.completed_at)
@@ -219,11 +228,14 @@ class TaskRequestParsingTests(unittest.TestCase):
             approval_step.owner_agent,
             SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
         )
+        self.assertEqual(approval_step.task_type, AgentTaskType.HUMAN_APPROVAL)
         self.assertEqual(approval_step.status, WorkflowStepStatus.WAITING_FOR_APPROVAL)
         self.assertTrue(approval_step.requires_user_approval)
         self.assertEqual(execution_step.owner_agent, SpecialistAgentName.EXECUTION_AGENT)
+        self.assertEqual(execution_step.task_type, AgentTaskType.EXECUTION_HANDOFF)
         self.assertEqual(execution_step.status, WorkflowStepStatus.BLOCKED)
         self.assertEqual(execution_step.depends_on, ["STEP-6"])
+        self.assertEqual(final_report_step.task_type, AgentTaskType.FINAL_REPORT)
         self.assertEqual(final_report_step.status, WorkflowStepStatus.BLOCKED)
         self.assertIsNotNone(response.state.aggregation)
         self.assertEqual(response.state.aggregation.waiting_step_ids, ["STEP-6"])

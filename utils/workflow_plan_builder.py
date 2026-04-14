@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from contracts.agent_input import AgentTaskType
 from contracts.task_request import OperationType, TaskRequest
 from contracts.task_response import (
     SpecialistAgentName,
@@ -30,6 +31,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=1,
             owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_type=AgentTaskType.DEPLOYMENT_ANALYSIS,
             task_description="Analyze deployment impact and rollout prerequisites.",
             agent_instruction=build_deployment_analysis_instruction(task_request),
             expected_output_json_format=build_specialist_result_format(
@@ -53,6 +55,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=2,
             owner_agent=SpecialistAgentName.INFRA_AGENT,
+            task_type=AgentTaskType.INFRASTRUCTURE_ANALYSIS,
             task_description="Analyze infrastructure dependencies and environment impact.",
             agent_instruction=build_infrastructure_analysis_instruction(task_request),
             expected_output_json_format=build_specialist_result_format(
@@ -76,6 +79,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=3,
             owner_agent=SpecialistAgentName.CI_CD_AGENT,
+            task_type=AgentTaskType.CI_CD_ANALYSIS,
             task_description="Analyze CI/CD impact, validation gates, and artifact flow.",
             agent_instruction=build_ci_cd_analysis_instruction(task_request),
             expected_output_json_format=build_specialist_result_format(focus="ci_cd"),
@@ -109,6 +113,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=5,
             owner_agent=SpecialistAgentName.RISK_POLICY_AGENT,
+            task_type=AgentTaskType.RISK_POLICY_REVIEW,
             task_description="Review proposed actions against risk and policy gates.",
             agent_instruction=build_risk_policy_instruction(task_request),
             expected_output_json_format={
@@ -165,6 +170,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
             build_plan_step(
                 step_order=6,
                 owner_agent=SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
+                task_type=AgentTaskType.HUMAN_APPROVAL,
                 task_description="Request human approval for gated actions.",
                 agent_instruction=build_human_approval_instruction(task_request),
                 expected_output_json_format={
@@ -214,6 +220,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=7 if risk_assessment.requires_user_approval else 6,
             owner_agent=SpecialistAgentName.EXECUTION_AGENT,
+            task_type=AgentTaskType.EXECUTION_HANDOFF,
             task_description="Prepare approved actions for execution handoff.",
             agent_instruction=build_execution_handoff_instruction(task_request),
             expected_output_json_format={
@@ -248,6 +255,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
         build_plan_step(
             step_order=8 if risk_assessment.requires_user_approval else 7,
             owner_agent=SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
+            task_type=AgentTaskType.FINAL_REPORT,
             task_description="Prepare final report payload for aggregation and publication.",
             agent_instruction=build_final_report_instruction(task_request),
             expected_output_json_format={
@@ -297,6 +305,7 @@ def build_task_specific_step(
         return build_plan_step(
             step_order=4,
             owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_type=AgentTaskType.SERVICE_ROLLOUT,
             task_description="Prepare the service rollout or recovery strategy.",
             agent_instruction=(
                 "Create the service-level rollout strategy for the requested "
@@ -328,6 +337,7 @@ def build_task_specific_step(
         return build_plan_step(
             step_order=4,
             owner_agent=SpecialistAgentName.INFRA_AGENT,
+            task_type=AgentTaskType.ENVIRONMENT_CHANGE,
             task_description="Prepare the environment change procedure.",
             agent_instruction=(
                 "Translate the requested infrastructure or configuration change "
@@ -363,6 +373,7 @@ def build_task_specific_step(
         return build_plan_step(
             step_order=4,
             owner_agent=SpecialistAgentName.CI_CD_AGENT,
+            task_type=AgentTaskType.PIPELINE_PROCEDURE,
             task_description="Prepare the pipeline or release-flow procedure.",
             agent_instruction=(
                 "Convert the requested CI/CD operation into an ordered pipeline "
@@ -392,6 +403,7 @@ def build_task_specific_step(
     return build_plan_step(
         step_order=4,
         owner_agent=SpecialistAgentName.INFRA_AGENT,
+        task_type=AgentTaskType.DIAGNOSTIC_PLAN,
         task_description="Prepare the diagnostic investigation plan.",
         agent_instruction=(
             "Build a diagnostic investigation plan that identifies likely failure "
@@ -421,6 +433,7 @@ def build_task_specific_step(
 def build_plan_step(
     step_order: int,
     owner_agent: SpecialistAgentName,
+    task_type: AgentTaskType,
     task_description: str,
     agent_instruction: str,
     expected_output_json_format: dict[str, Any],
@@ -436,6 +449,7 @@ def build_plan_step(
     return WorkflowPlanStep(
         step_id=f"STEP-{step_order}",
         owner_agent=owner_agent,
+        task_type=task_type,
         task_description=task_description,
         agent_instruction=agent_instruction,
         step_order=step_order,

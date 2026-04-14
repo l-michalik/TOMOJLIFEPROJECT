@@ -202,6 +202,7 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
     {
       "step_id": "STEP-1",
       "owner_agent": "DeploymentAgent",
+      "task_type": "deployment_analysis",
       "task_description": "Prepare deployment rollout for billing-api on stage.",
       "agent_instruction": "Review deployment prerequisites and return only JSON.",
       "step_order": 1,
@@ -305,6 +306,7 @@ Po poprawnym zakończeniu etapu planowania Supervisor zwraca ustrukturyzowany ko
 Znaczenie dodatkowych pól:
 
 - `plan[*].step_order`: kolejność wykonania kroków w workflow.
+- `plan[*].task_type`: jawna klasyfikacja kroku przekazywana dalej do ustandaryzowanego kontraktu wejściowego agenta.
 - `plan[*].agent_instruction`: instrukcja przekazywana do docelowego agenta dla danego kroku.
 - `plan[*].expected_output_json_format`: oczekiwany format odpowiedzi JSON zwracanej przez agenta.
 - `plan[*].start_conditions`: warunki rozpoczęcia kroku.

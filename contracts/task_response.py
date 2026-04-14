@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from contracts.agent_input import AgentTaskType
 from contracts.final_report import WorkflowFinalReport
 from contracts.task_request import ClarificationItem, RequestSource, TaskRequest
 from contracts.workflow_aggregation import WorkflowAggregationSummary
@@ -71,6 +72,7 @@ class SpecialistAgentName(str, Enum):
 class WorkflowPlanStep(BaseModel):
     step_id: str
     owner_agent: SpecialistAgentName
+    task_type: AgentTaskType
     task_description: str
     agent_instruction: str
     step_order: int

@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from deepagents import create_deep_agent
 
+from contracts.agent_input import AgentExecutionInput
 from contracts.task_request import TaskRequest
 from contracts.task_response import (
     SpecialistAgentName,
@@ -426,17 +427,15 @@ def build_step_prompt(
     task_request: TaskRequest,
     dependency_results: dict[str, Any],
 ) -> str:
+    agent_input = build_agent_execution_input(
+        step=step,
+        task_request=task_request,
+        dependency_results=dependency_results,
+    )
     return (
-        "Execute the assigned workflow step.\n\n"
-        f"request_id: {task_request.request_id}\n"
-        f"step_id: {step.step_id}\n"
-        f"owner_agent: {step.owner_agent.value}\n"
-        f"task_description: {step.task_description}\n"
-        f"agent_instruction: {step.agent_instruction}\n"
-        f"required_input_context: {json.dumps(step.required_input_context, ensure_ascii=True)}\n"
-        f"dependency_results: {json.dumps(dependency_results, ensure_ascii=True)}\n"
-        f"expected_result: {step.expected_result}\n"
-        f"result_handoff_condition: {step.result_handoff_condition}\n"
+        "Execute the assigned workflow step using the standardized agent input contract.\n\n"
+        "Agent input JSON:\n"
+        f"{agent_input.model_dump_json(indent=2)}\n\n"
         "Return only valid JSON with this structure:\n"
         "{\n"
         '  "result": {"matches_expected_format": true},\n'
@@ -445,6 +444,31 @@ def build_step_prompt(
         "}\n"
         "The result payload must follow this expected format:\n"
         f"{json.dumps(step.expected_output_json_format, ensure_ascii=True)}\n"
+    )
+
+
+def build_agent_execution_input(
+    step: WorkflowPlanStep,
+    task_request: TaskRequest,
+    dependency_results: dict[str, Any],
+) -> AgentExecutionInput:
+    return AgentExecutionInput.from_workflow_step(
+        step_id=step.step_id,
+        owner_agent=step.owner_agent.value,
+        task_type=step.task_type,
+        instruction=step.agent_instruction,
+        target_environment=task_request.standardized_work_item.target_environment,
+        technical_params=step.required_input_context,
+        execution_constraints=task_request.standardized_work_item.constraints
+        + step.start_conditions,
+        previous_step_outputs=dependency_results,
+        safety_flags=step.risk_flags
+        + (["requires_user_approval"] if step.requires_user_approval else []),
+        depends_on=step.depends_on,
+        expected_output_json_format=step.expected_output_json_format,
+        expected_result=step.expected_result,
+        result_handoff_condition=step.result_handoff_condition,
+        task_request=task_request,
     )
 
 

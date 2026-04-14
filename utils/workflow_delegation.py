@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -20,6 +19,11 @@ from contracts.task_response import (
 )
 from settings.supervisor import get_openai_model
 from utils.supervisor import read_last_message_text
+from utils.workflow_policy import (
+    apply_policy_decision_states,
+    build_fallback_step_response as build_policy_fallback_step_response,
+    build_runtime_input_context,
+)
 from utils.workflow_result_aggregation import (
     build_error_details,
     build_status_reason,
@@ -83,6 +87,7 @@ def delegate_workflow_plan(
             plan_index[executed_step.step_id].status = state_index[
                 executed_step.step_id
             ].status
+        apply_policy_decision_states(mutable_plan, step_states)
 
     apply_blocked_states(mutable_plan, state_index)
     for step in mutable_plan:
@@ -188,10 +193,16 @@ def execute_step(
         for dependency_id in step.depends_on
         if state_index[dependency_id].response is not None
     }
+    step_with_runtime_context = step.model_copy(deep=True)
+    step_with_runtime_context.required_input_context = build_runtime_input_context(
+        step=step,
+        task_request=task_request,
+        dependency_results=dependency_results,
+    )
     step_state = state_index[step.step_id]
     step_state.status = WorkflowStepStatus.DELEGATED
     step_state.updated_at = utc_now()
-    raw_response = runner(step, task_request, dependency_results, model)
+    raw_response = runner(step_with_runtime_context, task_request, dependency_results, model)
     normalized_response = normalize_step_response(raw_response)
     step_state.response = normalized_response["result"]
     step_state.logs = normalized_response["logs"]
@@ -304,7 +315,7 @@ def run_specialist_step(
     model: str,
 ) -> dict[str, Any]:
     if not os.getenv("OPENAI_API_KEY"):
-        return build_fallback_step_response(step, dependency_results)
+        return build_fallback_step_response(step, task_request, dependency_results)
 
     agent = create_deep_agent(
         model=get_openai_model(explicit_model=model),
@@ -321,7 +332,7 @@ def run_specialist_step(
     try:
         return json.loads(raw_text)
     except json.JSONDecodeError:
-        return build_fallback_step_response(step, dependency_results)
+        return build_fallback_step_response(step, task_request, dependency_results)
 
 
 def build_step_system_prompt(owner_agent: SpecialistAgentName) -> str:
@@ -363,26 +374,16 @@ def build_step_prompt(
 
 
 def build_fallback_step_response(
-    step: WorkflowPlanStep, dependency_results: dict[str, Any]
+    step: WorkflowPlanStep,
+    task_request: TaskRequest,
+    dependency_results: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
-        "result": {
-            "step_id": step.step_id,
-            "owner_agent": step.owner_agent.value,
-            "task_description": step.task_description,
-            "expected_result": step.expected_result,
-            "required_input_context": deepcopy(step.required_input_context),
-            "dependency_step_ids": sorted(dependency_results),
-        },
-        "logs": [
-            f"Delegated step {step.step_id} to {step.owner_agent.value}.",
-            "Fallback specialist response generated without external model invocation.",
-        ],
-        "execution_details": {
-            "response_source": "fallback",
-            "dependency_count": len(dependency_results),
-        },
-        "status": WorkflowStepStatus.COMPLETED.value,
-    }
+    return build_policy_fallback_step_response(
+        step=step,
+        task_request=task_request,
+        dependency_results=dependency_results,
+    )
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)

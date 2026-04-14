@@ -148,6 +148,104 @@ class WorkflowDelegationTests(unittest.TestCase):
         self.assertTrue(failed_result.is_problematic)
         self.assertEqual(failed_result.error.message, "Infrastructure validation failed.")
 
+    def test_workflow_waits_for_approval_when_policy_marks_action_as_gated(self) -> None:
+        task_request = build_task_request("req-110")
+
+        def fake_runner(step, _task_request, _dependency_results, _model):
+            if step.step_id == "STEP-2":
+                return {
+                    "result": {
+                        "decisions": [
+                            {
+                                "action_id": "STEP-1-ACTION-1",
+                                "allowed": True,
+                                "requiresApproval": True,
+                                "reason": "Human approval is required.",
+                            }
+                        ]
+                    },
+                    "logs": ["policy review completed"],
+                    "status": "completed",
+                }
+            return {
+                "result": {
+                    "summary": "analysis complete",
+                    "proposed_actions": [
+                        {
+                            "action_id": "STEP-1-ACTION-1",
+                            "action_type": "deploy",
+                            "details": {"service_name": "billing-api"},
+                        }
+                    ],
+                },
+                "logs": [f"completed {step.step_id}"],
+                "status": "completed",
+            }
+
+        result = delegate_workflow_plan(
+            plan=build_policy_test_plan(),
+            task_request=task_request,
+            model="test-model",
+            execution_mode="sequential",
+            step_runner=fake_runner,
+        )
+
+        self.assertEqual(result["lifecycle_status"], WorkflowLifecycleStatus.WAITING_FOR_APPROVAL)
+        self.assertEqual(result["step_states"][1].status, WorkflowStepStatus.WAITING_FOR_APPROVAL)
+        self.assertEqual(result["step_states"][2].status, WorkflowStepStatus.BLOCKED)
+        self.assertEqual(result["aggregation"].next_decision, "await_user_approval")
+
+    def test_workflow_blocks_execution_when_policy_disallows_all_actions(self) -> None:
+        task_request = build_task_request("req-111")
+
+        def fake_runner(step, _task_request, _dependency_results, _model):
+            if step.step_id == "STEP-2":
+                return {
+                    "result": {
+                        "decisions": [
+                            {
+                                "action_id": "STEP-1-ACTION-1",
+                                "allowed": False,
+                                "requires_approval": False,
+                                "reason": "Policy denies the action.",
+                            }
+                        ]
+                    },
+                    "logs": ["policy review completed"],
+                    "status": "completed",
+                }
+            return {
+                "result": {
+                    "summary": "analysis complete",
+                    "proposed_actions": [
+                        {
+                            "action_id": "STEP-1-ACTION-1",
+                            "action_type": "deploy",
+                            "details": {"service_name": "billing-api"},
+                        }
+                    ],
+                },
+                "logs": [f"completed {step.step_id}"],
+                "status": "completed",
+            }
+
+        result = delegate_workflow_plan(
+            plan=build_policy_test_plan(),
+            task_request=task_request,
+            model="test-model",
+            execution_mode="sequential",
+            step_runner=fake_runner,
+        )
+
+        self.assertEqual(result["lifecycle_status"], WorkflowLifecycleStatus.BLOCKED)
+        self.assertEqual(result["step_states"][1].status, WorkflowStepStatus.COMPLETED)
+        self.assertEqual(result["step_states"][2].status, WorkflowStepStatus.BLOCKED)
+        self.assertEqual(
+            result["step_states"][2].status_reason,
+            "Risk/Policy Agent did not allow any action for execution.",
+        )
+        self.assertEqual(result["aggregation"].next_decision, "review_blocked_steps")
+
 
 class ConcurrencyTracker:
     def __init__(self) -> None:
@@ -233,6 +331,58 @@ def build_parallel_test_plan() -> list[WorkflowPlanStep]:
             result_handoff_condition="Return the result as JSON.",
             required_input_context={"service_name": "billing-api"},
             expected_result="Rollout strategy prepared.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+    ]
+
+
+def build_policy_test_plan() -> list[WorkflowPlanStep]:
+    return [
+        WorkflowPlanStep(
+            step_id="STEP-1",
+            owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
+            task_description="Analyze deployment prerequisites.",
+            agent_instruction="Return JSON.",
+            step_order=1,
+            depends_on=[],
+            expected_output_json_format={"proposed_actions": ["string"]},
+            start_conditions=["Validated input is available."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"service_name": "billing-api"},
+            expected_result="Deployment prerequisites analyzed.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+        WorkflowPlanStep(
+            step_id="STEP-2",
+            owner_agent=SpecialistAgentName.RISK_POLICY_AGENT,
+            task_description="Review proposed actions against policy.",
+            agent_instruction="Return JSON.",
+            step_order=2,
+            depends_on=["STEP-1"],
+            expected_output_json_format={"decisions": ["string"]},
+            start_conditions=["Step 1 completed."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={
+                "actions": [],
+                "environment": "stage",
+                "operation_type": "deploy",
+                "business_context": {"request_id": "req-policy"},
+            },
+            expected_result="Policy decisions prepared.",
+            status=WorkflowStepStatus.PLANNED,
+        ),
+        WorkflowPlanStep(
+            step_id="STEP-3",
+            owner_agent=SpecialistAgentName.EXECUTION_AGENT,
+            task_description="Prepare approved actions for execution.",
+            agent_instruction="Return JSON.",
+            step_order=3,
+            depends_on=["STEP-2"],
+            expected_output_json_format={"execution_handoff": {"approved_actions": ["string"]}},
+            start_conditions=["Step 2 completed."],
+            result_handoff_condition="Return the result as JSON.",
+            required_input_context={"policy_decision_step": "STEP-2"},
+            expected_result="Execution handoff prepared.",
             status=WorkflowStepStatus.PLANNED,
         ),
     ]

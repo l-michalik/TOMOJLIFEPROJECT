@@ -72,8 +72,9 @@ def build_specialist_instruction(
 
 def build_risk_policy_instruction(task_request: TaskRequest) -> str:
     return (
-        "Review all aggregated specialist actions for policy compliance, execution "
-        f"risk, and approval requirements. Request: {task_request.user_request}. "
+        "Review the structured policy input containing actions, environment, "
+        "operation_type, and business_context for policy compliance, execution risk, "
+        f"and approval requirements. Request: {task_request.user_request}. "
         "Return one JSON decision per proposed action."
     )
 

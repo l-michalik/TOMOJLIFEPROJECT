@@ -131,7 +131,22 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                 "decision and approval requirement."
             ),
             required_input_context={
-                **base_context,
+                "actions": [],
+                "environment": base_context["target_environment"],
+                "operation_type": base_context["operation_type"],
+                "business_context": {
+                    key: value
+                    for key, value in {
+                        "request_id": task_request.request_id,
+                        "source": task_request.source.value,
+                        "priority": base_context["priority"],
+                        "service_name": base_context["service_name"],
+                        "ticket_id": task_request.params.ticket_id,
+                        "conversation_id": task_request.params.conversation_id,
+                        "user_request": task_request.user_request,
+                    }.items()
+                    if value is not None
+                },
                 "aggregated_risk_flags": risk_assessment.risk_flags,
                 "specialist_steps": specialist_step_ids,
             },

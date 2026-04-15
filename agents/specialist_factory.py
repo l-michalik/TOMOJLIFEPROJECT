@@ -4,6 +4,7 @@ from typing import Any, Sequence
 
 from deepagents import create_deep_agent
 
+from agents.ci_cd_agent import CICDAgent
 from agents.deployment_agent import DeploymentAgent
 from agents.infra_agent import InfraAgent
 from agents.specialist_base import BaseSpecialistAgent
@@ -32,6 +33,12 @@ def build_specialist_agent(
         )
     if owner_agent == SpecialistAgentName.INFRA_AGENT:
         return InfraAgent(
+            model=model,
+            tools=tools,
+            deep_agent_factory=resolved_deep_agent_factory,
+        )
+    if owner_agent == SpecialistAgentName.CI_CD_AGENT:
+        return CICDAgent(
             model=model,
             tools=tools,
             deep_agent_factory=resolved_deep_agent_factory,

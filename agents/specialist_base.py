@@ -19,6 +19,11 @@ from utils.specialist_error_handling import (
     classify_agent_exception,
     ensure_consistent_agent_output,
 )
+from utils.specialist_execution_logging import (
+    SpecialistExecutionAuditLogger,
+    attach_execution_details,
+    wrap_specialist_tools,
+)
 from utils.supervisor import read_last_message_text
 from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 
@@ -62,10 +67,22 @@ class BaseSpecialistAgent:
         )
 
     def run(self, payload: AgentExecutionInput | dict[str, Any]) -> AgentExecutionOutput:
+        audit_logger = SpecialistExecutionAuditLogger(
+            owner_agent=self.owner_agent,
+            input_snapshot=payload,
+        )
         try:
             agent_input = AgentExecutionInput.model_validate(payload)
         except Exception as exc:
-            return self.build_failed_output(
+            audit_logger.record_error(
+                summary="Specialist agent input contract validation failed.",
+                error={
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                    "raw_payload_type": type(payload).__name__,
+                },
+            )
+            failed_output = self.build_failed_output(
                 code="invalid_agent_input",
                 category="prompt_error",
                 message="Specialist agent input contract validation failed.",
@@ -74,8 +91,28 @@ class BaseSpecialistAgent:
                 can_retry=False,
                 reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
+            return attach_execution_details(output=failed_output, audit_logger=audit_logger)
 
+        audit_logger = SpecialistExecutionAuditLogger(
+            owner_agent=self.owner_agent,
+            request_id=agent_input.context.request_id,
+            step_id=agent_input.step_id,
+            user_id=agent_input.context.user_id,
+        )
+        audit_logger.record_input_received(agent_input.model_dump(mode="json"))
         working_context = self.build_working_context(agent_input)
+        audit_logger.record_decision(
+            summary="Specialist working context prepared for delegated analysis.",
+            decision_type="working_context_prepared",
+            payload={
+                "expected_result_keys": sorted(
+                    working_context.expected_output_json_format.keys()
+                ),
+                "prompt_section_count": len(working_context.prompt_sections),
+                "tool_count": len(self.tools),
+            },
+            status="delegated",
+        )
         prompt = self.build_prompt(working_context)
         log_ai_request(
             logger,
@@ -91,10 +128,19 @@ class BaseSpecialistAgent:
         )
 
         try:
-            raw_text = self.invoke_prompt(prompt, working_context)
+            raw_text = self.invoke_prompt(
+                prompt,
+                working_context,
+                audit_logger=audit_logger,
+            )
         except Exception as exc:
             classified_error = classify_agent_exception(exc)
-            return self.build_failed_output(**classified_error)
+            audit_logger.record_error(
+                summary=classified_error["message"],
+                error=classified_error["details"],
+            )
+            failed_output = self.build_failed_output(**classified_error)
+            return attach_execution_details(output=failed_output, audit_logger=audit_logger)
 
         log_ai_response(
             logger,
@@ -106,13 +152,32 @@ class BaseSpecialistAgent:
             generic_response=self.response_log_summary,
             owner_agent=self.owner_agent,
         )
+        audit_logger.record_decision(
+            summary="Specialist model response received and queued for contract parsing.",
+            decision_type="response_received",
+            payload={"response_preview": raw_text},
+            status="running",
+        )
         parsed_output = self.parse_output(raw_text)
-        return ensure_consistent_agent_output(
+        final_output = ensure_consistent_agent_output(
             agent_output=parsed_output,
             owner_agent=self.owner_agent,
             expected_result_format=working_context.expected_output_json_format,
             raw_text=raw_text,
         )
+        audit_logger.record_decision(
+            summary="Specialist output normalized to the shared workflow contract.",
+            decision_type="output_normalized",
+            payload={
+                "status": final_output.status.value,
+                "analysis_detail_count": len(final_output.analysis_details),
+                "recommended_action_count": len(final_output.recommended_actions),
+                "warning_count": len(final_output.warnings),
+                "technical_error_count": len(final_output.technical_errors),
+            },
+            status=final_output.status.value,
+        )
+        return attach_execution_details(output=final_output, audit_logger=audit_logger)
 
     def build_working_context(
         self,
@@ -184,10 +249,15 @@ class BaseSpecialistAgent:
         self,
         prompt: str,
         working_context: SpecialistAgentWorkingContext,
+        *,
+        audit_logger: SpecialistExecutionAuditLogger,
     ) -> str:
         agent = self.deep_agent_factory(
             model=self.model,
-            tools=self.get_tools(working_context),
+            tools=wrap_specialist_tools(
+                self.get_tools(working_context),
+                audit_logger,
+            ),
             system_prompt=self.system_prompt,
             name=self.agent_name,
         )

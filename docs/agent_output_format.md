@@ -41,6 +41,37 @@ Kontrakt wyjściowy:
     "Deployment prerequisites analyzed."
   ],
   "status": "completed",
+  "execution_details": {
+    "owner_agent": "DeploymentAgent",
+    "request_id": "req-001",
+    "step_id": "STEP-1",
+    "user_id": "user-123",
+    "started_at": "2026-04-15T10:00:00Z",
+    "completed_at": "2026-04-15T10:00:03Z",
+    "input_snapshot": {
+      "instruction": "Analyze deployment prerequisites."
+    },
+    "final_status": "completed",
+    "audit_events": [
+      {
+        "event_id": "STEP-1-event-1",
+        "timestamp": "2026-04-15T10:00:00Z",
+        "owner_agent": "DeploymentAgent",
+        "request_id": "req-001",
+        "step_id": "STEP-1",
+        "user_id": "user-123",
+        "event_type": "input_received",
+        "status": null,
+        "summary": "Specialist agent received normalized working input.",
+        "payload": {
+          "working_input": {
+            "instruction": "Analyze deployment prerequisites."
+          }
+        }
+      }
+    ],
+    "tool_calls": []
+  },
   "analysis_details": [
     {
       "category": "deployment",
@@ -115,6 +146,7 @@ Kontrakt wyjściowy:
 - `result`: wynik merytoryczny kroku zgodny z `expected_output_json_format`.
 - `logs`: lista krótkich logów operacyjnych opisujących przebieg kroku.
 - `status`: końcowy status kroku używany przez `Supervisor` do sterowania workflow.
+- `execution_details`: ustandaryzowany audit trail zawierający wejście robocze, decyzje, wywołania narzędzi, odpowiedzi narzędzi oraz finalny status kroku.
 
 ## Pola wymagane przez specyfikację orkiestracji
 
@@ -125,12 +157,22 @@ Kontrakt wyjściowy:
 - `technical_errors`: błędy techniczne i wykonawcze.
 - `supervisor_data`: dane pomocnicze do agregacji wyników przez `Supervisor`.
 - `session_memory`: krótkoterminowa pamięć sesyjna agenta dla bieżącego kroku.
+- `execution_details.audit_events`: strukturalne zdarzenia audytowe gotowe do agregacji, tracingu i audytu.
+- `execution_details.tool_calls`: strukturalny zapis request/response/error dla narzędzi użytych przez agenta.
 
 ## Opis pól rozszerzonych
 
 - `analysis_details[].category`: obszar analizy, np. `deployment`, `infra`, `ci_cd`, `policy`.
 - `analysis_details[].summary`: krótki opis wyniku analizy.
 - `analysis_details[].details`: szczegóły domenowe, np. listy findings, metadane, decyzje.
+- `execution_details.owner_agent`: agent, który wygenerował audit trail.
+- `execution_details.request_id`: identyfikator korelacyjny zgłoszenia.
+- `execution_details.step_id`: identyfikator kroku workflow.
+- `execution_details.user_id`: identyfikator użytkownika powiązanego ze zgłoszeniem.
+- `execution_details.input_snapshot`: znormalizowane wejście robocze po sanitizacji danych wrażliwych.
+- `execution_details.final_status`: status końcowy kroku zapisany w audit trail.
+- `execution_details.audit_events[]`: uporządkowane zdarzenia typu `input_received`, `decision_recorded`, `tool_call_started`, `tool_call_completed`, `tool_call_failed`, `error_recorded`.
+- `execution_details.tool_calls[]`: pełniejszy zapis request/response/error dla pojedynczego wywołania narzędzia.
 - `recommended_actions[].action_id`: stabilny identyfikator akcji w obrębie workflow.
 - `recommended_actions[].action_type`: typ akcji, np. `deploy`, `terraform_apply`, `pipeline_run`.
 - `recommended_actions[].description`: zwięzły opis celu akcji.

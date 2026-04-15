@@ -9,6 +9,10 @@ from agents.specialist_base import BaseSpecialistAgent
 from contracts.agent_input import AgentExecutionInput, AgentTaskType
 from contracts.agent_output import AgentExecutionOutput, AgentExecutionStatus
 from settings.supervisor import load_prompt
+from utils.specialist_execution_logging import (
+    SpecialistExecutionAuditLogger,
+    attach_execution_details,
+)
 
 ToolDefinition = Any
 
@@ -76,7 +80,18 @@ class InfraAgent(BaseSpecialistAgent):
         try:
             agent_input = AgentExecutionInput.model_validate(payload)
         except Exception as exc:
-            return self.build_failed_output(
+            audit_logger = SpecialistExecutionAuditLogger(
+                owner_agent="InfraAgent",
+                input_snapshot=payload,
+            )
+            audit_logger.record_error(
+                summary="InfraAgent input contract validation failed.",
+                error={
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+            output = self.build_failed_output(
                 code="invalid_agent_input",
                 category="prompt_error",
                 message="Specialist agent input contract validation failed.",
@@ -85,6 +100,7 @@ class InfraAgent(BaseSpecialistAgent):
                 can_retry=False,
                 reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
+            return attach_execution_details(output=output, audit_logger=audit_logger)
 
         missing_context = identify_missing_infrastructure_context(agent_input)
         if missing_context:
@@ -268,10 +284,26 @@ def build_blocked_infrastructure_output(
     missing_context: list[str],
 ) -> AgentExecutionOutput:
     scenario = infer_infrastructure_scenario(agent_input)
+    audit_logger = SpecialistExecutionAuditLogger(
+        owner_agent="InfraAgent",
+        request_id=agent_input.context.request_id,
+        step_id=agent_input.step_id,
+        user_id=agent_input.context.user_id,
+    )
+    audit_logger.record_input_received(agent_input.model_dump(mode="json"))
+    audit_logger.record_decision(
+        summary="Infrastructure analysis blocked because required infrastructure context is missing.",
+        decision_type="missing_context_detected",
+        payload={
+            "missing_context": missing_context,
+            "infrastructure_scenario": scenario,
+        },
+        status=AgentExecutionStatus.BLOCKED.value,
+    )
     findings = [
         "Missing required infrastructure context: " + ", ".join(missing_context) + "."
     ]
-    return AgentExecutionOutput(
+    output = AgentExecutionOutput(
         result={
             "focus": "infrastructure",
             "infrastructure_scenario": scenario,
@@ -301,6 +333,7 @@ def build_blocked_infrastructure_output(
         ],
         warnings=["InfraAgent skipped execution because required inputs are missing."],
     )
+    return attach_execution_details(output=output, audit_logger=audit_logger)
 
 
 def describe_tool(tool: ToolDefinition) -> str:

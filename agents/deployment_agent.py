@@ -9,6 +9,11 @@ from contracts.agent_input import AgentExecutionInput, AgentTaskType
 from contracts.agent_output import AgentExecutionOutput, AgentExecutionStatus
 from agents.specialist_base import BaseSpecialistAgent
 from settings.supervisor import load_prompt
+from utils.specialist_execution_logging import (
+    SpecialistExecutionAuditLogger,
+    attach_execution_details,
+    utc_now,
+)
 
 ToolDefinition = Any
 
@@ -48,7 +53,18 @@ class DeploymentAgent(BaseSpecialistAgent):
         try:
             agent_input = AgentExecutionInput.model_validate(payload)
         except Exception as exc:
-            return self.build_failed_output(
+            audit_logger = SpecialistExecutionAuditLogger(
+                owner_agent="DeploymentAgent",
+                input_snapshot=payload,
+            )
+            audit_logger.record_error(
+                summary="DeploymentAgent input contract validation failed.",
+                error={
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+            output = self.build_failed_output(
                 code="invalid_agent_input",
                 category="prompt_error",
                 message="Specialist agent input contract validation failed.",
@@ -57,6 +73,7 @@ class DeploymentAgent(BaseSpecialistAgent):
                 can_retry=False,
                 reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
+            return attach_execution_details(output=output, audit_logger=audit_logger)
 
         missing_context = identify_missing_deployment_context(agent_input)
         if missing_context:
@@ -162,10 +179,23 @@ def build_blocked_deployment_output(
     agent_input: AgentExecutionInput,
     missing_context: list[str],
 ) -> AgentExecutionOutput:
+    audit_logger = SpecialistExecutionAuditLogger(
+        owner_agent="DeploymentAgent",
+        request_id=agent_input.context.request_id,
+        step_id=agent_input.step_id,
+        user_id=agent_input.context.user_id,
+    )
+    audit_logger.record_input_received(agent_input.model_dump(mode="json"))
+    audit_logger.record_decision(
+        summary="Deployment analysis blocked because required deployment context is missing.",
+        decision_type="missing_context_detected",
+        payload={"missing_context": missing_context},
+        status=AgentExecutionStatus.BLOCKED.value,
+    )
     findings = [
         "Missing required deployment context: " + ", ".join(missing_context) + "."
     ]
-    return AgentExecutionOutput(
+    output = AgentExecutionOutput(
         result={
             "focus": "deployment",
             "summary": "DeploymentAgent is blocked by missing deployment context.",
@@ -192,6 +222,7 @@ def build_blocked_deployment_output(
         ],
         warnings=["DeploymentAgent skipped execution because required inputs are missing."],
     )
+    return attach_execution_details(output=output, audit_logger=audit_logger)
 
 
 def normalize_partial_deployment_payload(payload: Any) -> Any:
@@ -229,6 +260,31 @@ def normalize_partial_deployment_payload(payload: Any) -> Any:
         ["Deployment state is incomplete and cannot be handed off for execution."],
     )
     normalized_payload["result"] = result
+    audit_events = list(
+        dict(normalized_payload.get("execution_details") or {}).get("audit_events") or []
+    )
+    audit_events.append(
+        {
+            "event_id": "deployment-normalization-event-1",
+            "timestamp": utc_now().isoformat(),
+            "owner_agent": "DeploymentAgent",
+            "request_id": None,
+            "step_id": None,
+            "user_id": None,
+            "event_type": "decision_recorded",
+            "status": AgentExecutionStatus.BLOCKED.value,
+            "summary": "Partial deployment output was normalized to blocked for safe workflow continuation.",
+            "payload": {
+                "decision_type": "partial_output_normalized",
+                "original_status": status,
+                "normalized_status": AgentExecutionStatus.BLOCKED.value,
+            },
+        }
+    )
+    normalized_payload["execution_details"] = {
+        **dict(normalized_payload.get("execution_details") or {}),
+        "audit_events": audit_events,
+    }
     return normalized_payload
 
 

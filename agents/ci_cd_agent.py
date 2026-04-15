@@ -9,6 +9,7 @@ from agents.specialist_base import BaseSpecialistAgent
 from contracts.agent_input import AgentExecutionInput, AgentTaskType
 from contracts.agent_output import AgentExecutionOutput, AgentExecutionStatus
 from settings.supervisor import load_prompt
+from utils.specialist_execution_logging import SpecialistExecutionAuditLogger, append_output_audit_event, attach_execution_details
 
 ToolDefinition = Any
 
@@ -111,7 +112,18 @@ class CICDAgent(BaseSpecialistAgent):
         try:
             agent_input = AgentExecutionInput.model_validate(payload)
         except Exception as exc:
-            return self.build_failed_output(
+            audit_logger = SpecialistExecutionAuditLogger(
+                owner_agent="CI_CD_Agent",
+                input_snapshot=payload,
+            )
+            audit_logger.record_error(
+                summary="CI_CD_Agent input contract validation failed.",
+                error={
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+            output = self.build_failed_output(
                 code="invalid_agent_input",
                 category="prompt_error",
                 message="Specialist agent input contract validation failed.",
@@ -120,6 +132,7 @@ class CICDAgent(BaseSpecialistAgent):
                 can_retry=False,
                 reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
+            return attach_execution_details(output=output, audit_logger=audit_logger)
 
         missing_context = identify_missing_ci_cd_context(agent_input)
         if missing_context:
@@ -209,6 +222,19 @@ class CICDAgent(BaseSpecialistAgent):
             + [action.action_id for action in parsed_output.recommended_actions]
         )
         parsed_output.supervisor_data.next_decision = "await_policy_and_approval_review"
+        append_output_audit_event(
+            output=parsed_output,
+            owner_agent="CI_CD_Agent",
+            summary="CI/CD actions were marked as approval-gated before execution handoff.",
+            event_type="decision_recorded",
+            payload={
+                "decision_type": "approval_gate_applied",
+                "approval_required_action_ids": [
+                    action.action_id for action in parsed_output.recommended_actions
+                ],
+            },
+            status=parsed_output.status.value,
+        )
         return parsed_output
 
 
@@ -296,8 +322,24 @@ def build_blocked_ci_cd_output(
     agent_input: AgentExecutionInput,
     missing_context: list[str],
 ) -> AgentExecutionOutput:
+    audit_logger = SpecialistExecutionAuditLogger(
+        owner_agent="CI_CD_Agent",
+        request_id=agent_input.context.request_id,
+        step_id=agent_input.step_id,
+        user_id=agent_input.context.user_id,
+    )
+    audit_logger.record_input_received(agent_input.model_dump(mode="json"))
+    audit_logger.record_decision(
+        summary="CI/CD analysis blocked because required repository, pipeline, or run context is missing.",
+        decision_type="missing_context_detected",
+        payload={
+            "missing_context": missing_context,
+            "ci_cd_scenario": infer_ci_cd_scenario(agent_input),
+        },
+        status=AgentExecutionStatus.BLOCKED.value,
+    )
     findings = ["Missing required CI/CD context: " + ", ".join(missing_context) + "."]
-    return AgentExecutionOutput(
+    output = AgentExecutionOutput(
         result={
             "focus": "ci_cd",
             "summary": "CI_CD_Agent is blocked by missing CI/CD context.",
@@ -325,6 +367,7 @@ def build_blocked_ci_cd_output(
         ],
         warnings=["CI_CD_Agent skipped execution because required inputs are missing."],
     )
+    return attach_execution_details(output=output, audit_logger=audit_logger)
 
 
 def build_pipeline_log_context(

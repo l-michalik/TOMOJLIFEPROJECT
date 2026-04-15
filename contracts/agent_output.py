@@ -77,6 +77,7 @@ class AgentExecutionOutput(BaseModel):
     result: dict[str, Any] = Field(default_factory=dict)
     logs: list[str] = Field(default_factory=list)
     status: AgentExecutionStatus
+    execution_details: dict[str, Any] = Field(default_factory=dict)
     analysis_details: list[AgentAnalysisDetail] = Field(default_factory=list)
     recommended_actions: list[AgentRecommendedAction] = Field(default_factory=list)
     artifacts: list[AgentArtifactReference] = Field(default_factory=list)

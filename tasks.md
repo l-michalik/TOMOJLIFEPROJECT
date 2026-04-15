@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Dodać do agentów wykonawczych mechanizmy obsługi błędów promptowania, błędów wywołań narzędzi, timeoutów, pustych wyników i niespójnych odpowiedzi. Każdy agent ma zwrócić wynik w przewidzianym kontrakcie nawet w przypadku błędu, wraz z informacją diagnostyczną, kodem lub kategorią problemu oraz rekomendacją dla Supervisora, czy możliwy jest retry, eskalacja lub oznaczenie kroku jako failed.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zaimplementować warstwę logowania dla DeploymentAgent, InfraAgent i CI_CD_Agent. Każdy agent ma zapisywać otrzymane wejście robocze, decyzje podjęte w trakcie analizy, wywołane narzędzia, odpowiedzi narzędzi, status realizacji oraz błędy. Logi mają być strukturalne i przygotowane do późniejszej agregacji, śledzenia i audytu przez komponenty obserwowalności.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 

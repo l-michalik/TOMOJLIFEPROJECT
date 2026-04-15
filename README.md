@@ -151,6 +151,27 @@ Detailed contract descriptions are available in `docs/supervisor_input_format.md
 
 The target specialist-agent split and responsibility boundaries are documented in `docs/specialist_agent_boundaries.md`.
 
+## Mermaid workflow diagram
+
+You can generate a Mermaid source file for the current agent workflow and, if Mermaid CLI is installed locally, render it to `png`.
+
+Command:
+
+```bash
+uv run python scripts/generate_agent_flow.py
+```
+
+Generated files:
+
+- `docs/diagrams/agent_workflow_flow.mmd`
+- `docs/diagrams/agent_workflow_flow.png` when `mmdc` is available
+
+If `png` rendering is unavailable, install Mermaid CLI first:
+
+```bash
+npm install -g @mermaid-js/mermaid-cli
+```
+
 ## Structure
 
 - `api/app.py` - FastAPI application and routes

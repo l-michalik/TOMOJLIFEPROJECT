@@ -1,0 +1,53 @@
+flowchart TD
+    A[API Request<br>/api/tasks] --> B[TaskRequest validation]
+    B --> C{Input complete?}
+    C -- No --> D[Return needs_clarification<br>Save checkpoint]
+    C -- Yes --> E[Load latest checkpoint]
+    E --> F{Existing workflow?}
+    F -- Waiting for approval or terminal --> G[Return persisted response]
+    F -- Active workflow --> H[Continue workflow delegation]
+    F -- None --> I[Supervisor planning]
+
+    I --> J{APP_AI_MODE=live<br>and OPENAI key present?}
+    J -- No --> K[Fallback plan builder]
+    J -- Yes --> L[DeepAgents Supervisor]
+    K --> M[Sort plan steps]
+    L --> M
+
+    M --> N[Save checkpoint: plan_created]
+    N --> H
+
+    H --> O[Delegate ready steps]
+    O --> P[STEP-1 Deployment analysis]
+    O --> Q[STEP-2 Infrastructure analysis]
+    O --> R[STEP-3 CI/CD analysis]
+
+    P --> S{Operation type}
+    Q --> S
+    R --> S
+
+    S -- deploy rollback restart --> T[STEP-4 Service rollout]
+    S -- scale configure --> U[STEP-4 Environment change]
+    S -- pipeline build test release --> V[STEP-4 Pipeline procedure]
+    S -- other --> W[STEP-4 Diagnostic plan]
+
+    T --> X[STEP-5 Risk and policy review]
+    U --> X
+    V --> X
+    W --> X
+
+    X --> Y{Approval required?}
+    Y -- Yes --> Z[STEP-6 Human approval]
+    Y -- No --> AA[STEP-6 or STEP-7 Execution handoff]
+    Z --> AB{Approved?}
+    AB -- No --> AC[Workflow blocked or rejected<br>Save checkpoint]
+    AB -- Yes --> AA
+
+    AA --> AD[STEP-7 or STEP-8 Final report]
+    AD --> AE[Aggregate result state]
+    AE --> AF[Save checkpoint]
+    AF --> AG[Return TaskResponse]
+
+    O --> AH{Any missing input<br>or failed dependency?}
+    AH -- Yes --> AI[Mark dependent steps blocked]
+    AI --> AF

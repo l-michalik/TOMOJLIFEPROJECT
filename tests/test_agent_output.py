@@ -66,6 +66,28 @@ class AgentExecutionOutputTests(unittest.TestCase):
         self.assertEqual(normalized["supervisor_data"].next_decision, "await_user_approval")
         self.assertEqual(normalized["warnings"], ["Production change detected."])
 
+    def test_top_level_recommended_actions_feed_supervisor_aggregation(self) -> None:
+        output = AgentExecutionOutput.model_validate(
+            {
+                "result": {
+                    "summary": "Deployment analysis completed.",
+                },
+                "logs": ["analysis complete"],
+                "status": "completed",
+                "recommended_actions": [
+                    {
+                        "action_id": "STEP-2-ACTION-1",
+                        "action_type": "deploy",
+                        "description": "Deploy billing-api to stage.",
+                        "details": {"service_name": "billing-api"},
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(output.supervisor_data.produced_action_ids, ["STEP-2-ACTION-1"])
+        self.assertEqual(output.result["proposed_actions"][0]["action_id"], "STEP-2-ACTION-1")
+
     def test_status_meanings_cover_every_supported_status(self) -> None:
         self.assertEqual(
             set(AGENT_EXECUTION_STATUS_WORKFLOW_MEANINGS),

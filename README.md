@@ -128,7 +128,7 @@ If planning succeeds, the API returns `status: "planned"` and a contract that in
 
 Legacy payload fields `task_description`, `parameters`, and `context` are still accepted and mapped to the new contract.
 
-Detailed contract description is available in `docs/supervisor_input_format.md`.
+Detailed contract descriptions are available in `docs/supervisor_input_format.md` and `docs/agent_output_format.md`.
 
 The target specialist-agent split and responsibility boundaries are documented in `docs/specialist_agent_boundaries.md`.
 

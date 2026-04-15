@@ -101,7 +101,10 @@ class AgentExecutionOutput(BaseModel):
                 normalized_data
             )
         if "supervisor_data" not in normalized_data:
-            normalized_data["supervisor_data"] = build_supervisor_data_from_result(result)
+            normalized_data["supervisor_data"] = build_supervisor_data_from_payload(
+                result=result,
+                recommended_actions=normalized_data.get("recommended_actions"),
+            )
 
         return normalized_data
 
@@ -227,8 +230,13 @@ def build_technical_errors_from_payload(payload: dict[str, Any]) -> list[dict[st
     return []
 
 
-def build_supervisor_data_from_result(result: dict[str, Any]) -> dict[str, Any]:
-    proposed_actions = build_recommended_actions_from_result(result)
+def build_supervisor_data_from_payload(
+    result: dict[str, Any],
+    recommended_actions: Any,
+) -> dict[str, Any]:
+    proposed_actions = normalize_recommended_actions(recommended_actions)
+    if not proposed_actions:
+        proposed_actions = build_recommended_actions_from_result(result)
     decisions = result.get("decisions")
     execution_handoff = result.get("execution_handoff")
 
@@ -266,6 +274,28 @@ def build_supervisor_data_from_result(result: dict[str, Any]) -> dict[str, Any]:
         supervisor_data["handoff_payload"] = execution_handoff
 
     return supervisor_data
+
+
+def normalize_recommended_actions(recommended_actions: Any) -> list[dict[str, Any]]:
+    if not isinstance(recommended_actions, list):
+        return []
+
+    normalized_actions: list[dict[str, Any]] = []
+    for index, raw_action in enumerate(recommended_actions, start=1):
+        if isinstance(raw_action, AgentRecommendedAction):
+            normalized_actions.append(raw_action.model_dump(mode="json"))
+            continue
+        if not isinstance(raw_action, dict):
+            continue
+        normalized_actions.append(
+            {
+                "action_id": str(raw_action.get("action_id") or f"ACTION-{index}"),
+                "action_type": str(raw_action.get("action_type") or "unknown"),
+                "description": raw_action.get("description"),
+                "details": dict(raw_action.get("details") or {}),
+            }
+        )
+    return normalized_actions
 
 
 def build_agent_execution_output_format(

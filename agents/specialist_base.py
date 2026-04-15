@@ -13,6 +13,7 @@ from contracts.agent_output import (
     AgentExecutionStatus,
     build_agent_execution_output_format,
 )
+from settings.supervisor import get_specialist_max_output_tokens
 from utils.supervisor import read_last_message_text
 from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 
@@ -41,6 +42,7 @@ class BaseSpecialistAgent:
         request_log_summary: str | None = None,
         response_log_summary: str | None = None,
         deep_agent_factory: DeepAgentFactory = create_deep_agent,
+        max_output_tokens: int | None = None,
     ) -> None:
         self.model = model
         self.owner_agent = owner_agent
@@ -50,6 +52,9 @@ class BaseSpecialistAgent:
         self.request_log_summary = request_log_summary
         self.response_log_summary = response_log_summary
         self.deep_agent_factory = deep_agent_factory
+        self.max_output_tokens = (
+            max_output_tokens or get_specialist_max_output_tokens()
+        )
 
     def run(self, payload: AgentExecutionInput | dict[str, Any]) -> AgentExecutionOutput:
         try:
@@ -141,6 +146,12 @@ class BaseSpecialistAgent:
                 ensure_ascii=True,
                 indent=2,
             ),
+            "Output budget:\n"
+            + (
+                f"Keep the entire JSON response under approximately {self.max_output_tokens} "
+                "tokens. Prefer short summaries, compact findings, and no repeated restatement "
+                "of the input."
+            ),
         ]
         sections.extend(working_context.prompt_sections)
         return "\n\n".join(sections)
@@ -161,6 +172,7 @@ class BaseSpecialistAgent:
             tools=self.get_tools(working_context),
             system_prompt=self.system_prompt,
             name=self.agent_name,
+            max_tokens=self.max_output_tokens,
         )
         result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
         return read_last_message_text(result)

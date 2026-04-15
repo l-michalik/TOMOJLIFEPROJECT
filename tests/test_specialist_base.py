@@ -25,7 +25,9 @@ class SpecialistBaseTests(unittest.TestCase):
         self.assertEqual(output.result["summary"], "Deployment analysis completed.")
         self.assertEqual(factory.last_kwargs["tools"], ["tool:release-readiness"])
         self.assertIn("nightly-release-window", factory.last_prompt)
+        self.assertIn("Keep the entire JSON response under approximately 1200 tokens", factory.last_prompt)
         self.assertEqual(factory.last_kwargs["name"], "deployment-agent")
+        self.assertEqual(factory.last_kwargs["max_tokens"], 1200)
 
     def test_base_agent_returns_failed_output_when_input_contract_is_invalid(self) -> None:
         agent = ExampleSpecialistAgent()

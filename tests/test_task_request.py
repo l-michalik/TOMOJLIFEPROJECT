@@ -1,6 +1,12 @@
 import unittest
+from unittest.mock import patch
 
-from agents.supervisor import checkpoint_store, resume_supervisor_workflow, run_supervisor_agent
+from agents.supervisor import (
+    checkpoint_store,
+    create_supervisor_agent,
+    resume_supervisor_workflow,
+    run_supervisor_agent,
+)
 from contracts.agent_input import AgentTaskType
 from contracts.task_request import InputStatus, OperationType, TaskRequest, TargetEnvironment
 from contracts.task_response import (
@@ -23,6 +29,19 @@ class TaskRequestParsingTests(unittest.TestCase):
         self.assertIn("expected_output_json_format", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("start_conditions", SUPERVISOR_SYSTEM_PROMPT)
         self.assertIn("result_handoff_condition", SUPERVISOR_SYSTEM_PROMPT)
+
+    def test_create_supervisor_agent_applies_output_token_limit(self) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_create_deep_agent(**kwargs):
+            captured_kwargs.update(kwargs)
+            return object()
+
+        with patch("agents.supervisor.create_deep_agent", side_effect=fake_create_deep_agent):
+            create_supervisor_agent(model="openai:gpt-5.4-mini")
+
+        self.assertEqual(captured_kwargs["name"], "platform-supervisor")
+        self.assertEqual(captured_kwargs["max_tokens"], 1800)
 
     def test_builds_standardized_work_item_from_user_request(self) -> None:
         task_request = TaskRequest.model_validate(

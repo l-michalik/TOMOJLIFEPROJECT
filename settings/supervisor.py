@@ -10,6 +10,10 @@ APP_AI_MODE_ENV = "APP_AI_MODE"
 APP_AI_MODE_MOCK = "mock"
 APP_AI_MODE_LIVE = "live"
 DEFAULT_APP_AI_MODE = APP_AI_MODE_MOCK
+SPECIALIST_MAX_OUTPUT_TOKENS_ENV = "SPECIALIST_MAX_OUTPUT_TOKENS"
+SUPERVISOR_MAX_OUTPUT_TOKENS_ENV = "SUPERVISOR_MAX_OUTPUT_TOKENS"
+DEFAULT_SPECIALIST_MAX_OUTPUT_TOKENS = 1200
+DEFAULT_SUPERVISOR_MAX_OUTPUT_TOKENS = 1800
 
 
 def load_prompt(prompt_name: str) -> str:
@@ -42,6 +46,20 @@ def get_openai_model(explicit_model: str | None = None) -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
 
 
+def get_specialist_max_output_tokens() -> int:
+    return get_int_env(
+        SPECIALIST_MAX_OUTPUT_TOKENS_ENV,
+        DEFAULT_SPECIALIST_MAX_OUTPUT_TOKENS,
+    )
+
+
+def get_supervisor_max_output_tokens() -> int:
+    return get_int_env(
+        SUPERVISOR_MAX_OUTPUT_TOKENS_ENV,
+        DEFAULT_SUPERVISOR_MAX_OUTPUT_TOKENS,
+    )
+
+
 def get_app_ai_mode() -> str:
     configured_mode = os.getenv(APP_AI_MODE_ENV, DEFAULT_APP_AI_MODE).strip().lower()
     if configured_mode in {APP_AI_MODE_MOCK, APP_AI_MODE_LIVE}:
@@ -55,3 +73,14 @@ def has_openai_api_key() -> bool:
 
 def is_live_ai_enabled() -> bool:
     return get_app_ai_mode() == APP_AI_MODE_LIVE and has_openai_api_key()
+
+
+def get_int_env(env_name: str, default: int) -> int:
+    raw_value = os.getenv(env_name, "").strip()
+    if not raw_value:
+        return default
+    try:
+        parsed_value = int(raw_value)
+    except ValueError:
+        return default
+    return parsed_value if parsed_value > 0 else default

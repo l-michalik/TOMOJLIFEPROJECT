@@ -51,9 +51,17 @@ class AgentArtifactReference(BaseModel):
     description: str | None = None
 
 
+class SupervisorFailureRecommendation(BaseModel):
+    can_retry: bool = False
+    recommended_action: str | None = None
+    reason: str | None = None
+
+
 class AgentTechnicalError(BaseModel):
     message: str
     code: str | None = None
+    category: str | None = None
+    supervisor_recommendation: SupervisorFailureRecommendation | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -221,15 +229,33 @@ def build_technical_errors_from_payload(payload: dict[str, Any]) -> list[dict[st
             {
                 "message": str(legacy_error.get("message") or "Specialist agent step failed."),
                 "code": legacy_error.get("code"),
+                "category": legacy_error.get("category"),
+                "supervisor_recommendation": legacy_error.get(
+                    "supervisor_recommendation"
+                ),
                 "details": {
                     key: value
                     for key, value in legacy_error.items()
-                    if key not in {"message", "code"}
+                    if key
+                    not in {
+                        "message",
+                        "code",
+                        "category",
+                        "supervisor_recommendation",
+                    }
                 },
             }
         ]
     if legacy_error:
-        return [{"message": str(legacy_error), "code": None, "details": {}}]
+        return [
+            {
+                "message": str(legacy_error),
+                "code": None,
+                "category": None,
+                "supervisor_recommendation": None,
+                "details": {},
+            }
+        ]
     return []
 
 
@@ -336,6 +362,12 @@ def build_agent_execution_output_format(
             {
                 "message": "string",
                 "code": "string",
+                "category": "string",
+                "supervisor_recommendation": {
+                    "can_retry": False,
+                    "recommended_action": "retry|escalate|mark_failed",
+                    "reason": "string",
+                },
                 "details": {},
             }
         ],

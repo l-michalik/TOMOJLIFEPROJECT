@@ -4,7 +4,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from contracts.agent_session_memory import AgentSessionMemory
-from contracts.agent_output import AgentArtifactReference, AgentTechnicalError, SupervisorAggregationPayload
+from contracts.agent_output import (
+    AgentArtifactReference,
+    AgentTechnicalError,
+    SupervisorAggregationPayload,
+    SupervisorFailureRecommendation,
+)
 
 
 class AggregatedExecutionStatus(str, Enum):
@@ -16,6 +21,8 @@ class AggregatedExecutionStatus(str, Enum):
 class StepErrorDetails(BaseModel):
     message: str
     code: str | None = None
+    category: str | None = None
+    supervisor_recommendation: SupervisorFailureRecommendation | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 

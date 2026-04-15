@@ -14,6 +14,11 @@ from contracts.agent_output import (
     build_agent_execution_output_format,
 )
 from settings.supervisor import get_specialist_max_output_tokens
+from utils.specialist_error_handling import (
+    build_failed_agent_output,
+    classify_agent_exception,
+    ensure_consistent_agent_output,
+)
 from utils.supervisor import read_last_message_text
 from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 
@@ -62,8 +67,12 @@ class BaseSpecialistAgent:
         except Exception as exc:
             return self.build_failed_output(
                 code="invalid_agent_input",
+                category="prompt_error",
                 message="Specialist agent input contract validation failed.",
                 details={"error": str(exc)},
+                recommended_action="mark_failed",
+                can_retry=False,
+                reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
 
         working_context = self.build_working_context(agent_input)
@@ -84,11 +93,8 @@ class BaseSpecialistAgent:
         try:
             raw_text = self.invoke_prompt(prompt, working_context)
         except Exception as exc:
-            return self.build_failed_output(
-                code="agent_execution_failed",
-                message="Specialist agent execution failed before producing a valid response.",
-                details={"error": str(exc)},
-            )
+            classified_error = classify_agent_exception(exc)
+            return self.build_failed_output(**classified_error)
 
         log_ai_response(
             logger,
@@ -100,7 +106,13 @@ class BaseSpecialistAgent:
             generic_response=self.response_log_summary,
             owner_agent=self.owner_agent,
         )
-        return self.parse_output(raw_text)
+        parsed_output = self.parse_output(raw_text)
+        return ensure_consistent_agent_output(
+            agent_output=parsed_output,
+            owner_agent=self.owner_agent,
+            expected_result_format=working_context.expected_output_json_format,
+            raw_text=raw_text,
+        )
 
     def build_working_context(
         self,
@@ -188,8 +200,12 @@ class BaseSpecialistAgent:
         except json.JSONDecodeError as exc:
             return self.build_failed_output(
                 code="invalid_json_response",
+                category="response_inconsistency",
                 message="Specialist agent did not return valid JSON.",
                 details={"error": str(exc), "raw_text": raw_text},
+                recommended_action="retry",
+                can_retry=True,
+                reason="Retry is possible because the model response could not be parsed as JSON.",
             )
 
         try:
@@ -197,26 +213,32 @@ class BaseSpecialistAgent:
         except Exception as exc:
             return self.build_failed_output(
                 code="invalid_agent_output",
+                category="response_inconsistency",
                 message="Specialist agent returned JSON that does not match the output contract.",
                 details={"error": str(exc)},
+                recommended_action="retry",
+                can_retry=True,
+                reason="Retry is possible because the returned JSON does not match the expected contract.",
             )
 
     def build_failed_output(
         self,
         *,
         code: str,
+        category: str,
         message: str,
         details: dict[str, Any],
+        recommended_action: str = "mark_failed",
+        can_retry: bool = False,
+        reason: str | None = None,
     ) -> AgentExecutionOutput:
-        return AgentExecutionOutput(
-            result={},
-            logs=[message],
-            status=AgentExecutionStatus.FAILED,
-            technical_errors=[
-                {
-                    "message": message,
-                    "code": code,
-                    "details": details,
-                }
-            ],
+        return build_failed_agent_output(
+            owner_agent=self.owner_agent,
+            code=code,
+            category=category,
+            message=message,
+            details=details,
+            recommended_action=recommended_action,
+            can_retry=can_retry,
+            reason=reason,
         )

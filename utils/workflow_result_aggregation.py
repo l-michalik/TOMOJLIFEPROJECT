@@ -18,15 +18,31 @@ def build_error_details(
         return {
             "message": str(error_payload.get("message") or "Specialist agent step failed."),
             "code": error_payload.get("code"),
+            "category": error_payload.get("category"),
+            "supervisor_recommendation": error_payload.get(
+                "supervisor_recommendation"
+            ),
             "details": {
                 key: value
                 for key, value in error_payload.items()
-                if key not in {"message", "code"}
+                if key not in {"message", "code", "category", "supervisor_recommendation"}
             },
         }
     if error_payload:
-        return {"message": str(error_payload), "code": None, "details": {}}
-    return {"message": "Specialist agent step failed.", "code": None, "details": {}}
+        return {
+            "message": str(error_payload),
+            "code": None,
+            "category": None,
+            "supervisor_recommendation": None,
+            "details": {},
+        }
+    return {
+        "message": "Specialist agent step failed.",
+        "code": None,
+        "category": None,
+        "supervisor_recommendation": None,
+        "details": {},
+    }
 
 
 def normalize_execution_details(raw_response: dict[str, Any]) -> dict[str, Any]:

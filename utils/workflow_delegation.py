@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -20,7 +20,11 @@ from contracts.task_response import (
     WorkflowStepState,
     WorkflowStepStatus,
 )
-from settings.supervisor import is_live_ai_enabled
+from settings.supervisor import (
+    get_specialist_timeout_seconds,
+    is_live_ai_enabled,
+)
+from utils.specialist_error_handling import build_failed_agent_output
 from utils.agent_session_memory import build_initial_session_memory, finalize_session_memory
 from utils.specialist_step_contract import build_primary_error_payload, map_agent_status_to_workflow_status
 from utils.workflow_policy import (
@@ -252,6 +256,12 @@ def normalize_step_response(
                 {
                     "message": "Specialist agent returned an invalid response payload.",
                     "code": "invalid_agent_output",
+                    "category": "response_inconsistency",
+                    "supervisor_recommendation": {
+                        "can_retry": True,
+                        "recommended_action": "retry",
+                        "reason": "Retry is possible because the specialist payload could not be validated.",
+                    },
                     "details": {"raw_response_type": type(raw_response).__name__},
                 }
             ],
@@ -405,7 +415,45 @@ def run_specialist_step(
         model=model,
         tools=build_specialist_tools(step),
     )
-    return specialist_agent.run(agent_input).model_dump(mode="json")
+    timeout_seconds = get_specialist_timeout_seconds()
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(specialist_agent.run, agent_input)
+    try:
+        return future.result(timeout=timeout_seconds).model_dump(mode="json")
+    except FutureTimeoutError:
+        future.cancel()
+        return build_failed_agent_output(
+            owner_agent=step.owner_agent.value,
+            code="agent_timeout",
+            category="timeout",
+            message="Specialist agent step timed out before returning a response.",
+            details={
+                "step_id": step.step_id,
+                "owner_agent": step.owner_agent.value,
+                "timeout_seconds": timeout_seconds,
+            },
+            recommended_action="retry",
+            can_retry=True,
+            reason="Retry is possible because the specialist step exceeded its configured timeout.",
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return build_failed_agent_output(
+            owner_agent=step.owner_agent.value,
+            code="agent_execution_failed",
+            category="execution_error",
+            message="Specialist agent step failed during delegated execution.",
+            details={
+                "step_id": step.step_id,
+                "owner_agent": step.owner_agent.value,
+                "exception_type": type(exc).__name__,
+                "error": str(exc),
+            },
+            recommended_action="escalate",
+            can_retry=False,
+            reason="Escalation is recommended because the delegated specialist execution raised an exception.",
+        ).model_dump(mode="json")
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def build_agent_execution_input(

@@ -141,6 +141,8 @@ Kontrakt wyjściowy:
 - `artifacts[].description`: opis znaczenia artefaktu.
 - `technical_errors[].message`: czytelny opis błędu.
 - `technical_errors[].code`: techniczny kod błędu do śledzenia i automatyzacji.
+- `technical_errors[].category`: kategoria problemu, np. `prompt_error`, `tool_invocation_error`, `timeout`, `empty_result`, `response_inconsistency`.
+- `technical_errors[].supervisor_recommendation`: jawna rekomendacja dla `Supervisor`, czy wykonać `retry`, `escalate` albo `mark_failed`.
 - `technical_errors[].details`: surowe dane diagnostyczne potrzebne do debugowania.
 - `supervisor_data.produced_action_ids`: akcje przygotowane przez krok i gotowe do agregacji.
 - `supervisor_data.blocked_action_ids`: akcje zablokowane przez politykę, brak zależności albo inne ograniczenie.
@@ -160,6 +162,13 @@ Kontrakt wyjściowy:
 - `failed`: krok zakończył się błędem technicznym lub semantycznym i `Supervisor` powinien oznaczyć krok jako nieudany.
 - `blocked`: krok nie może być kontynuowany z powodu brakujących zależności, ograniczeń polityki albo brakującego kontekstu.
 - `waiting_for_approval`: krok wymaga decyzji człowieka przed dalszą kontynuacją workflow.
+
+## Zasady obsługi błędów agentów
+
+- Każdy agent musi zwrócić kompletny kontrakt nawet wtedy, gdy wystąpi błąd promptowania, błąd narzędzia, timeout, pusty wynik albo niespójna odpowiedź.
+- Błędy techniczne muszą zawierać co najmniej `message` oraz przynajmniej jedno z pól `code` lub `category`.
+- Dla odpowiedzi błędnych albo niespójnych agent musi ustawić `technical_errors[].supervisor_recommendation`, aby `Supervisor` mógł automatycznie podjąć decyzję `retry`, `escalate` albo `mark_failed`.
+- Status `completed` nie może być użyty z pustym `result` ani z payloadem niespełniającym `expected_output_json_format`; takie odpowiedzi są normalizowane do `failed`.
 
 ## Zasady mapowania na workflow Supervisora
 

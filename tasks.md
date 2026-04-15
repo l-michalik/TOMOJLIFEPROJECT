@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zbudować mechanizm pozwalający Supervisorowi i warstwie orkiestracji przypisać dany krok planu do właściwego agenta wykonawczego. Należy zdefiniować reguły klasyfikacji zadań deploymentowych, infrastrukturalnych i CI/CD, sposób obsługi zadań mieszanych oraz zachowanie w przypadku niejednoznacznego przypisania. Wynikiem ma być jednoznaczny routing kroku do odpowiedniego komponentu.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Dodać do agentów wykonawczych mechanizmy obsługi błędów promptowania, błędów wywołań narzędzi, timeoutów, pustych wyników i niespójnych odpowiedzi. Każdy agent ma zwrócić wynik w przewidzianym kontrakcie nawet w przypadku błędu, wraz z informacją diagnostyczną, kodem lub kategorią problemu oraz rekomendacją dla Supervisora, czy możliwy jest retry, eskalacja lub oznaczenie kroku jako failed.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 

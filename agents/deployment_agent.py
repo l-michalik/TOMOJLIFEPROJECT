@@ -50,8 +50,12 @@ class DeploymentAgent(BaseSpecialistAgent):
         except Exception as exc:
             return self.build_failed_output(
                 code="invalid_agent_input",
+                category="prompt_error",
                 message="Specialist agent input contract validation failed.",
                 details={"error": str(exc)},
+                recommended_action="mark_failed",
+                can_retry=False,
+                reason="The step input is invalid, so Supervisor should mark the step as failed.",
             )
 
         missing_context = identify_missing_deployment_context(agent_input)
@@ -106,8 +110,12 @@ class DeploymentAgent(BaseSpecialistAgent):
         except Exception as exc:
             return self.build_failed_output(
                 code="invalid_agent_output",
+                category="response_inconsistency",
                 message="Specialist agent returned JSON that does not match the output contract.",
                 details={"error": str(exc)},
+                recommended_action="retry",
+                can_retry=True,
+                reason="Retry is possible because the normalized deployment payload is still inconsistent with the contract.",
             )
 
 

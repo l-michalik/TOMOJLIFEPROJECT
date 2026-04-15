@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from agents.specialist_base import BaseSpecialistAgent
+from agents.specialist_factory import build_specialist_agent
 from contracts.agent_input import AgentExecutionInput
 from contracts.agent_output import (
     AgentExecutionOutput,
@@ -20,14 +20,7 @@ from contracts.task_response import (
     WorkflowStepStatus,
 )
 from settings.supervisor import is_live_ai_enabled
-from utils.specialist_step_contract import (
-    build_primary_error_payload,
-    build_step_agent_name,
-    build_step_request_log_summary,
-    build_step_response_log_summary,
-    build_step_system_prompt,
-    map_agent_status_to_workflow_status,
-)
+from utils.specialist_step_contract import build_primary_error_payload, map_agent_status_to_workflow_status
 from utils.workflow_policy import (
     apply_policy_decision_states,
     build_fallback_step_response as build_policy_fallback_step_response,
@@ -381,14 +374,10 @@ def run_specialist_step(
         task_request=task_request,
         dependency_results=dependency_results,
     )
-    specialist_agent = BaseSpecialistAgent(
+    specialist_agent = build_specialist_agent(
+        owner_agent=step.owner_agent,
         model=model,
-        owner_agent=step.owner_agent.value,
-        system_prompt=build_step_system_prompt(step.owner_agent),
-        agent_name=build_step_agent_name(step.owner_agent),
         tools=build_specialist_tools(step),
-        request_log_summary=build_step_request_log_summary(step.owner_agent),
-        response_log_summary=build_step_response_log_summary(step.owner_agent),
     )
     return specialist_agent.run(agent_input).model_dump(mode="json")
 

@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Przygotować prompt systemowy dla DeploymentAgent ukierunkowany na zadania wdrożeniowe. Prompt ma wymuszać analizę instrukcji deploymentowej, identyfikację usługi i środowiska, dobór właściwych narzędzi wdrożeniowych, przygotowanie bezpiecznego planu operacji oraz zwrócenie wyniku w ustandaryzowanym formacie JSON. Należy uwzględnić scenariusze takie jak deploy nowej wersji, restart usługi, walidacja konfiguracji wdrożenia i zbieranie logów technicznych.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Przygotować prompt systemowy dla CI_CD_Agent dla zadań związanych z pipeline’ami build/deploy/test. Prompt ma umożliwiać analizę definicji pipeline, statusu jobów, błędów builda, uruchomień testów i zmian w konfiguracji CI/CD. Agent ma zwracać konkretne działania lub diagnozę techniczną, logi i status, w sposób możliwy do bezpośredniej agregacji przez Supervisora.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 

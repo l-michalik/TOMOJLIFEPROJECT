@@ -4,14 +4,23 @@ from typing import Any
 
 from contracts.agent_output import AgentExecutionOutput, AgentExecutionStatus
 from contracts.task_response import SpecialistAgentName, WorkflowStepStatus
+from settings.supervisor import load_prompt
 
 
 def build_step_system_prompt(owner_agent: SpecialistAgentName) -> str:
-    return (
-        f"You are {owner_agent.value}. "
-        "Return only valid JSON using the standardized agent output contract. "
-        "Allowed statuses are completed, failed, blocked, and waiting_for_approval."
-    )
+    prompt_name_by_agent = {
+        SpecialistAgentName.DEPLOYMENT_AGENT: "deployment_agent.md",
+        SpecialistAgentName.INFRA_AGENT: "infra_agent.md",
+        SpecialistAgentName.CI_CD_AGENT: "ci_cd_agent.md",
+    }
+    prompt_name = prompt_name_by_agent.get(owner_agent)
+    if prompt_name is None:
+        return (
+            f"You are {owner_agent.value}. "
+            "Return only valid JSON using the standardized agent output contract. "
+            "Allowed statuses are completed, failed, blocked, and waiting_for_approval."
+        )
+    return load_prompt(prompt_name)
 
 
 def build_step_request_log_summary(owner_agent: SpecialistAgentName) -> str:

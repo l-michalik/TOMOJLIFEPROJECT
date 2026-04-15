@@ -153,7 +153,7 @@ The target specialist-agent split and responsibility boundaries are documented i
 
 ## Mermaid workflow diagram
 
-You can generate a Mermaid source file for the current agent workflow and, if Mermaid CLI is installed locally, render it to `png`.
+You can generate a Mermaid source file for the current agent workflow and, if Mermaid CLI is installed locally, render it to `svg` and high-resolution `png`.
 
 Command:
 
@@ -164,7 +164,10 @@ uv run python scripts/generate_agent_flow.py
 Generated files:
 
 - `docs/diagrams/agent_workflow_flow.mmd`
+- `docs/diagrams/agent_workflow_flow.svg` when `mmdc` is available
 - `docs/diagrams/agent_workflow_flow.png` when `mmdc` is available
+
+The `svg` output is the preferred artifact for viewing or embedding because it stays sharp at any zoom level. The `png` output is rendered with a higher default scale and can be adjusted with `--png-scale`.
 
 If `png` rendering is unavailable, install Mermaid CLI first:
 

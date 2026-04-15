@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from agents.specialist_factory import build_specialist_agent
 from contracts.agent_input import AgentExecutionInput
+from contracts.agent_session_memory import AgentSessionMemory
 from contracts.agent_output import (
     AgentExecutionOutput,
     AgentExecutionStatus,
@@ -20,6 +21,7 @@ from contracts.task_response import (
     WorkflowStepStatus,
 )
 from settings.supervisor import is_live_ai_enabled
+from utils.agent_session_memory import build_initial_session_memory, finalize_session_memory
 from utils.specialist_step_contract import build_primary_error_payload, map_agent_status_to_workflow_status
 from utils.workflow_policy import (
     apply_policy_decision_states,
@@ -34,7 +36,7 @@ from utils.workflow_result_aggregation import (
 )
 
 StepRunner = Callable[
-    [WorkflowPlanStep, TaskRequest, dict[str, Any], str],
+    [WorkflowPlanStep, TaskRequest, dict[str, Any], str, AgentSessionMemory],
     dict[str, Any],
 ]
 CheckpointCallback = Callable[[dict[str, Any]], None]
@@ -190,17 +192,33 @@ def execute_step(
         for dependency_id in step.depends_on
         if state_index[dependency_id].response is not None
     }
+    dependency_step_states = [
+        state_index[dependency_id]
+        for dependency_id in step.depends_on
+        if dependency_id in state_index
+    ]
     step_with_runtime_context = step.model_copy(deep=True)
     step_with_runtime_context.required_input_context = build_runtime_input_context(
         step=step,
         task_request=task_request,
         dependency_results=dependency_results,
     )
+    initial_session_memory = build_initial_session_memory(
+        step=step_with_runtime_context,
+        task_request=task_request,
+        dependency_step_states=dependency_step_states,
+    )
     step_state = state_index[step.step_id]
     step_state.status = WorkflowStepStatus.DELEGATED
     step_state.updated_at = utc_now()
-    raw_response = runner(step_with_runtime_context, task_request, dependency_results, model)
-    normalized_response = normalize_step_response(raw_response)
+    raw_response = runner(
+        step_with_runtime_context,
+        task_request,
+        dependency_results,
+        model,
+        initial_session_memory,
+    )
+    normalized_response = normalize_step_response(raw_response, initial_session_memory)
     step_state.response = normalized_response["result"]
     step_state.logs = normalized_response["logs"]
     step_state.analysis_details = normalized_response["analysis_details"]
@@ -210,6 +228,7 @@ def execute_step(
     step_state.technical_errors = normalized_response["technical_errors"]
     step_state.supervisor_data = normalized_response["supervisor_data"]
     step_state.execution_details = normalized_response["execution_details"]
+    step_state.session_memory = normalized_response["session_memory"]
     step_state.error_details = normalized_response["error_details"]
     step_state.status = normalized_response["status"]
     step_state.updated_at = utc_now()
@@ -218,7 +237,10 @@ def execute_step(
     return step
 
 
-def normalize_step_response(raw_response: dict[str, Any]) -> dict[str, Any]:
+def normalize_step_response(
+    raw_response: dict[str, Any],
+    initial_session_memory: AgentSessionMemory,
+) -> dict[str, Any]:
     try:
         agent_output = AgentExecutionOutput.model_validate(raw_response)
     except Exception:
@@ -252,6 +274,8 @@ def normalize_step_response(raw_response: dict[str, Any]) -> dict[str, Any]:
         "technical_errors": agent_output.technical_errors,
         "supervisor_data": agent_output.supervisor_data,
         "execution_details": normalize_execution_details(raw_response or {}),
+        "session_memory": agent_output.session_memory
+        or finalize_session_memory(initial_session_memory, raw_response or {}),
         "error_details": error_details,
         "status": normalized_status,
         "status_reason": build_status_reason(normalized_status, error_details),
@@ -365,6 +389,7 @@ def run_specialist_step(
     task_request: TaskRequest,
     dependency_results: dict[str, Any],
     model: str,
+    session_memory: AgentSessionMemory,
 ) -> dict[str, Any]:
     if not is_live_ai_enabled():
         return build_fallback_step_response(step, task_request, dependency_results)
@@ -373,6 +398,7 @@ def run_specialist_step(
         step=step,
         task_request=task_request,
         dependency_results=dependency_results,
+        session_memory=session_memory,
     )
     specialist_agent = build_specialist_agent(
         owner_agent=step.owner_agent,
@@ -386,6 +412,7 @@ def build_agent_execution_input(
     step: WorkflowPlanStep,
     task_request: TaskRequest,
     dependency_results: dict[str, Any],
+    session_memory: AgentSessionMemory,
 ) -> AgentExecutionInput:
     return AgentExecutionInput.from_workflow_step(
         step_id=step.step_id,
@@ -397,6 +424,7 @@ def build_agent_execution_input(
         execution_constraints=task_request.standardized_work_item.constraints
         + step.start_conditions,
         previous_step_outputs=dependency_results,
+        session_memory=session_memory,
         safety_flags=step.risk_flags
         + (["requires_user_approval"] if step.requires_user_approval else []),
         depends_on=step.depends_on,

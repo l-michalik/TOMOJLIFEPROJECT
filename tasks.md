@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zaimplementować CI_CD_Agent do obsługi kroków związanych z pipeline’ami, buildami, testami i procesem release. Agent ma analizować stan pipeline, identyfikować przyczyny niepowodzeń, proponować lub wykonywać działania zgodne z planem oraz zwracać wynik w formacie wspólnym dla agentów wykonawczych. Należy uwzględnić integrację z logami pipeline oraz scenariusze walidacji poprawności konfiguracji CI/CD.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Przygotować mechanizm krótkoterminowej pamięci sesyjnej dla każdego agenta wykonawczego. Pamięć ma przechowywać bieżący kontekst zadania, ostatnie komendy, wyniki pośrednie, logi środowiskowe i istotne dane techniczne potrzebne w trakcie realizacji pojedynczego kroku. Należy zapewnić, że pamięć lokalna nie staje się niezależnym źródłem prawdy poza stanem globalnym zarządzanym przez Supervisora.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 
@@ -7,3 +7,4 @@ Zasady developmentu
 - Nazewnictwo funkcji, typów, zmiennych oraz plików musi być jednoznaczne i opisowe, tak aby jasno komunikowało ich przeznaczenie. Implementacja powinna obejmować wyłącznie wymagania wynikające ze specyfikacji, bez dodawania logiki defensywnej ani spekulatywnej wykraczającej poza określony zakres.
 - Struktura projektu powinna zachowywać separację odpowiedzialności, a w razie potrzeby należy wydzielać funkcje, typy i narzędzia do osobnych plików lub katalogów oraz tworzyć nowe elementy struktury, jeśli poprawia to czytelność i skalowalność rozwiązania.
 - Refaktoryzacja powinna ograniczać się do fragmentów kodu bezpośrednio związanych z realizowanym zadaniem. Szersze zmiany są dopuszczalne wyłącznie wtedy, gdy są konieczne dla zapewnienia poprawności działania lub spójności architektonicznej.
+- Pomiń wszelkie zadania wymagające utworzenia testów

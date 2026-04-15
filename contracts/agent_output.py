@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from contracts.agent_session_memory import AgentSessionMemory
+
 
 class AgentExecutionStatus(str, Enum):
     COMPLETED = "completed"
@@ -75,6 +77,7 @@ class AgentExecutionOutput(BaseModel):
     supervisor_data: SupervisorAggregationPayload = Field(
         default_factory=SupervisorAggregationPayload
     )
+    session_memory: AgentSessionMemory | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -342,6 +345,29 @@ def build_agent_execution_output_format(
             "approval_required_action_ids": ["string"],
             "next_decision": "string",
             "handoff_payload": {},
+        },
+        "session_memory": {
+            "request_id": "string",
+            "step_id": "string",
+            "owner_agent": "string",
+            "authority": {
+                "authoritative_source": "supervisor_workflow_state",
+                "scope": "single_step_execution",
+                "is_source_of_truth": False,
+                "usage_rule": "string",
+            },
+            "current_task_context": {},
+            "recent_commands": [{"summary": "string", "source": "execution_details"}],
+            "intermediate_results": [
+                {
+                    "source_step_id": "string",
+                    "summary": "string",
+                    "payload": {},
+                }
+            ],
+            "environment_logs": ["string"],
+            "technical_notes": {},
+            "updated_at": "2026-04-15T10:00:00Z",
         },
     }
 

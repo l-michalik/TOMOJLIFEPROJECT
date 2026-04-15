@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from contracts.agent_session_memory import AgentSessionMemory
 from contracts.agent_input import AgentTaskType
 from contracts.agent_output import (
     AgentAnalysisDetail,
@@ -111,6 +112,7 @@ class WorkflowStepState(BaseModel):
         default_factory=SupervisorAggregationPayload
     )
     execution_details: dict[str, Any] = Field(default_factory=dict)
+    session_memory: AgentSessionMemory | None = None
     error_details: dict[str, Any] | None = None
     status_reason: str | None = None
     updated_at: datetime

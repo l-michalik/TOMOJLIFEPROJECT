@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from contracts.agent_session_memory import AgentSessionMemory
 from contracts.task_request import RequestSource, TargetEnvironment, TaskPriority, TaskRequest
 
 
@@ -49,6 +50,7 @@ class AgentExecutionInput(BaseModel):
     technical_params: dict[str, Any] = Field(default_factory=dict)
     execution_constraints: list[str] = Field(default_factory=list)
     previous_step_outputs: dict[str, Any] = Field(default_factory=dict)
+    session_memory: AgentSessionMemory | None = None
     safety_flags: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
     expected_output_json_format: dict[str, Any] = Field(default_factory=dict)
@@ -108,6 +110,7 @@ class AgentExecutionInput(BaseModel):
         technical_params: dict[str, Any],
         execution_constraints: list[str],
         previous_step_outputs: dict[str, Any],
+        session_memory: AgentSessionMemory | None,
         safety_flags: list[str],
         depends_on: list[str],
         expected_output_json_format: dict[str, Any],
@@ -143,6 +146,7 @@ class AgentExecutionInput(BaseModel):
             technical_params=normalized_technical_params,
             execution_constraints=execution_constraints,
             previous_step_outputs=previous_step_outputs,
+            session_memory=session_memory,
             safety_flags=safety_flags,
             depends_on=depends_on,
             expected_output_json_format=expected_output_json_format,

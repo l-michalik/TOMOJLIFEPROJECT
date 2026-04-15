@@ -126,6 +126,12 @@ class BaseSpecialistAgent:
         agent_input = working_context.agent_input
         sections = [
             "Execute the assigned workflow step using the standardized agent input contract.",
+            (
+                "Session memory rule:\n"
+                "Treat session_memory as a short-term local cache for this single step. "
+                "It is not an independent source of truth and must never override the "
+                "Supervisor-managed workflow state."
+            ),
             "Agent input JSON:\n" + agent_input.model_dump_json(indent=2),
             "Return only valid JSON with this structure:\n"
             + json.dumps(

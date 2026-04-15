@@ -10,6 +10,7 @@ Kontrakt wyjściowy:
 - oddziela wynik merytoryczny od informacji potrzebnych do audytu i orkiestracji,
 - dostarcza dane do agregacji kroków workflow bez dodatkowego mapowania domenowego,
 - przenosi logi, ostrzeżenia, błędy techniczne i artefakty w jawnej, wersjonowalnej strukturze,
+- materializuje krótkoterminową pamięć sesyjną agenta dla pojedynczego kroku bez tworzenia nowego źródła prawdy,
 - jednoznacznie określa status kroku i jego wpływ na dalszy workflow.
 
 ## Struktura danych
@@ -80,6 +81,31 @@ Kontrakt wyjściowy:
     "approval_required_action_ids": [],
     "next_decision": null,
     "handoff_payload": {}
+  },
+  "session_memory": {
+    "request_id": "req-001",
+    "step_id": "STEP-1",
+    "owner_agent": "DeploymentAgent",
+    "authority": {
+      "authoritative_source": "supervisor_workflow_state",
+      "scope": "single_step_execution",
+      "is_source_of_truth": false,
+      "usage_rule": "Use this memory only as a local session snapshot. Resolve conflicts in favor of Supervisor-managed global workflow state."
+    },
+    "current_task_context": {
+      "task_description": "Analyze deployment prerequisites.",
+      "service_name": "billing-api",
+      "target_environment": "stage"
+    },
+    "recent_commands": [],
+    "intermediate_results": [],
+    "environment_logs": [
+      "Deployment prerequisites analyzed."
+    ],
+    "technical_notes": {
+      "risk_flags": []
+    },
+    "updated_at": "2026-04-15T10:00:00Z"
   }
 }
 ```
@@ -98,6 +124,7 @@ Kontrakt wyjściowy:
 - `warnings`: ostrzeżenia nieblokujące kroku, ale istotne dla operatora lub Supervisora.
 - `technical_errors`: błędy techniczne i wykonawcze.
 - `supervisor_data`: dane pomocnicze do agregacji wyników przez `Supervisor`.
+- `session_memory`: krótkoterminowa pamięć sesyjna agenta dla bieżącego kroku.
 
 ## Opis pól rozszerzonych
 
@@ -120,6 +147,12 @@ Kontrakt wyjściowy:
 - `supervisor_data.approval_required_action_ids`: akcje, które wymagają decyzji człowieka.
 - `supervisor_data.next_decision`: następna decyzja workflow oczekiwana przez Supervisora.
 - `supervisor_data.handoff_payload`: dodatkowy payload przekazywany do kolejnego etapu, zwykle do `Execution Agent`.
+- `session_memory.authority`: jawna deklaracja, że pamięć lokalna jest podrzędna wobec globalnego stanu workflow.
+- `session_memory.current_task_context`: aktualny kontekst bieżącego kroku potrzebny podczas wykonania.
+- `session_memory.recent_commands`: ostatnie komendy lub wywołania narzędzi wykryte w lokalnym kontekście sesji.
+- `session_memory.intermediate_results`: skrócone wyniki pośrednie z zależności i bieżącego kroku.
+- `session_memory.environment_logs`: lokalny wycinek logów środowiskowych istotnych dla pojedynczego kroku.
+- `session_memory.technical_notes`: techniczne dane pomocnicze, np. wejście runtime, flagi ryzyka i ostatnie szczegóły wykonania.
 
 ## Dozwolone statusy i znaczenie workflow
 
@@ -146,7 +179,13 @@ Wpływ na dalszy przebieg:
 
 Model `AgentExecutionOutput` wspiera dwa poziomy zgodności:
 
-- docelowy format top-level z polami `analysis_details`, `recommended_actions`, `artifacts`, `warnings`, `technical_errors` i `supervisor_data`,
+- docelowy format top-level z polami `analysis_details`, `recommended_actions`, `artifacts`, `warnings`, `technical_errors`, `supervisor_data` i `session_memory`,
 - zgodność wsteczna z payloadem legacy, w którym część tych danych znajduje się wewnątrz `result`, np. `proposed_actions`, `artifacts`, `warnings`, `decisions` albo `execution_handoff`.
 
 Jeżeli agent zwróci tylko format legacy, warstwa kontraktu znormalizuje odpowiedź do wspólnego modelu. Jeżeli agent zwróci pełny format docelowy, `Supervisor` użyje go bez utraty danych do agregacji.
+
+## Zasada źródła prawdy
+
+- `session_memory` nie jest trwałym ani nadrzędnym stanem workflow.
+- Pamięć sesyjna jest budowana z danych wejściowych kroku, wyników zależności oraz bieżącej odpowiedzi agenta.
+- W razie rozbieżności zawsze obowiązuje stan globalny utrzymywany przez `Supervisor` w `WorkflowState` i checkpointach.

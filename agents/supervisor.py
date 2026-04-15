@@ -5,10 +5,10 @@ from contracts.task_response import TaskResponse
 from contracts.workflow_approval import WorkflowApprovalDecisionRequest
 from contracts.task_response import WorkflowLifecycleStatus
 from settings.supervisor import (
-    SPECIALIST_SUBAGENTS,
     SUPERVISOR_AGENT_NAME,
-    SUPERVISOR_SYSTEM_PROMPT,
+    get_specialist_subagents,
     get_openai_model,
+    get_supervisor_system_prompt,
     is_live_ai_enabled,
 )
 from utils.supervisor import (
@@ -36,8 +36,8 @@ checkpoint_store = get_workflow_checkpoint_store()
 def create_supervisor_agent(model: str | None = None):
     return create_deep_agent(
         model=get_openai_model(explicit_model=model),
-        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-        subagents=SPECIALIST_SUBAGENTS,
+        system_prompt=get_supervisor_system_prompt(),
+        subagents=get_specialist_subagents(),
         name=SUPERVISOR_AGENT_NAME,
     )
 

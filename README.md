@@ -21,6 +21,7 @@ Example:
 
 ```env
 APP_AI_MODE=mock
+LLM_PROMPT_MODE=heavy
 OPENAI_MODEL=openai:gpt-5.4-mini
 OPENAI_API_KEY=your_key_here
 ```
@@ -50,6 +51,38 @@ OPENAI_API_KEY=your_key_here
 ```
 
 This makes token spend opt-in: local development stays on fallback behavior by default, and real model usage requires an explicit mode switch.
+
+## LLM prompt mode
+
+The application also supports prompt loading modes controlled by `LLM_PROMPT_MODE` in `.env`.
+
+- `heavy` - default mode. The full prompt file from `prompts/` is sent to the model.
+- `light` - sends only the first 3 non-empty lines of the prompt file. The prompt files are structured so these first 3 lines act as a compact summary: `Summary`, `Focus`, and `Constraint`.
+
+Example:
+
+```env
+LLM_PROMPT_MODE=heavy
+```
+
+Example for lower token usage:
+
+```env
+LLM_PROMPT_MODE=light
+```
+
+Current local `.env` configuration in this repository uses:
+
+```env
+LLM_PROMPT_MODE=heavy
+```
+
+Implementation details:
+
+- `.env` is loaded with `python-dotenv`
+- prompt mode is read in `settings/supervisor.py`
+- `load_prompt(...)` returns either the full prompt or the 3-line summary
+- this applies to both the Supervisor prompt and specialist prompts
 
 ## Run the API
 

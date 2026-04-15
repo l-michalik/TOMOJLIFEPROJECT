@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Przygotować mechanizm krótkoterminowej pamięci sesyjnej dla każdego agenta wykonawczego. Pamięć ma przechowywać bieżący kontekst zadania, ostatnie komendy, wyniki pośrednie, logi środowiskowe i istotne dane techniczne potrzebne w trakcie realizacji pojedynczego kroku. Należy zapewnić, że pamięć lokalna nie staje się niezależnym źródłem prawdy poza stanem globalnym zarządzanym przez Supervisora.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zbudować mechanizm pozwalający Supervisorowi i warstwie orkiestracji przypisać dany krok planu do właściwego agenta wykonawczego. Należy zdefiniować reguły klasyfikacji zadań deploymentowych, infrastrukturalnych i CI/CD, sposób obsługi zadań mieszanych oraz zachowanie w przypadku niejednoznacznego przypisania. Wynikiem ma być jednoznaczny routing kroku do odpowiedniego komponentu.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 

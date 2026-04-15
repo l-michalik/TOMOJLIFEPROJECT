@@ -22,6 +22,7 @@ from utils.workflow_delegation import delegate_workflow_plan
 from utils.workflow_final_report import attach_final_report
 from utils.workflow_plan_builder import build_workflow_plan
 from utils.workflow_risk import assess_workflow_risk, build_workflow_confidence
+from utils.workflow_routing import build_routing_risk_flags, build_task_routing_decision
 from utils.workflow_state import (
     TERMINAL_WORKFLOW_STATUSES,
     apply_human_approval_decision,
@@ -247,19 +248,33 @@ def run_supervisor_planning(task_request: TaskRequest, model: str) -> dict:
         planned_output = parse_planned_supervisor_output(raw_text=raw_text)
     except Exception:
         return build_fallback_planning_result(task_request)
+
+    deterministic_plan = build_workflow_plan(task_request)
+    fallback_result = build_fallback_planning_result(task_request)
     return {
-        "plan": planned_output.plan,
+        "plan": deterministic_plan,
         "confidence": planned_output.confidence,
-        "risk_flags": planned_output.risk_flags,
-        "requires_user_approval": planned_output.requires_user_approval,
+        "risk_flags": list(
+            dict.fromkeys(fallback_result["risk_flags"] + planned_output.risk_flags)
+        ),
+        "requires_user_approval": (
+            planned_output.requires_user_approval
+            or fallback_result["requires_user_approval"]
+        ),
     }
 
 
 def build_fallback_planning_result(task_request: TaskRequest) -> dict:
     risk_assessment = assess_workflow_risk(task_request)
+    routing_decision = build_task_routing_decision(task_request)
+    plan = build_workflow_plan(task_request)
     return {
-        "plan": build_workflow_plan(task_request),
+        "plan": plan,
         "confidence": build_workflow_confidence(task_request),
-        "risk_flags": risk_assessment.risk_flags,
+        "risk_flags": list(
+            dict.fromkeys(
+                risk_assessment.risk_flags + build_routing_risk_flags(routing_decision)
+            )
+        ),
         "requires_user_approval": risk_assessment.requires_user_approval,
     }

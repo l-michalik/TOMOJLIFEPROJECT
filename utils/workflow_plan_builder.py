@@ -3,115 +3,108 @@ from __future__ import annotations
 from typing import Any
 
 from contracts.agent_input import AgentTaskType
-from contracts.task_request import OperationType, TaskRequest
+from contracts.task_request import TaskRequest
 from contracts.task_response import (
     SpecialistAgentName,
     WorkflowPlanStep,
     WorkflowStepStatus,
 )
+from contracts.workflow_routing import (
+    RoutingDecisionType,
+    SpecialistDomain,
+    TaskRoutingDecision,
+)
 from utils.workflow_plan_templates import (
-    build_ci_cd_analysis_instruction,
-    build_deployment_analysis_instruction,
     build_execution_handoff_instruction,
     build_final_report_instruction,
     build_human_approval_instruction,
-    build_infrastructure_analysis_instruction,
     build_risk_policy_instruction,
-    build_specialist_result_format,
+)
+from utils.workflow_step_factory import (
+    build_domain_analysis_step,
+    build_plan_step,
+    build_task_specific_step,
 )
 from utils.workflow_risk import WorkflowRiskAssessment, assess_workflow_risk
+from utils.workflow_routing import (
+    build_routing_context,
+    build_routing_risk_flags,
+    build_task_routing_decision,
+)
 
 
 def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
-    work_item = task_request.standardized_work_item
     risk_assessment = assess_workflow_risk(task_request)
-    base_context = build_base_context(task_request)
+    routing_decision = build_task_routing_decision(task_request)
+    base_context = build_base_context(task_request, routing_decision)
+    plan_risk_flags = combine_plan_risk_flags(risk_assessment, routing_decision)
 
-    steps: list[WorkflowPlanStep] = [
-        build_plan_step(
-            step_order=1,
-            owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
-            task_type=AgentTaskType.DEPLOYMENT_ANALYSIS,
-            task_description="Analyze deployment impact and rollout prerequisites.",
-            agent_instruction=build_deployment_analysis_instruction(task_request),
-            expected_output_json_format=build_specialist_result_format(
-                focus="deployment"
-            ),
-            start_conditions=["Request input is validated and ready for planning."],
-            depends_on=[],
-            result_handoff_condition=(
-                "Forward the result when deployment prerequisites, rollout notes, "
-                "and proposed actions are returned in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "Deployment analysis defines rollout prerequisites, service impact, "
-                "and executable recommendations."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
-        ),
-        build_plan_step(
-            step_order=2,
-            owner_agent=SpecialistAgentName.INFRA_AGENT,
-            task_type=AgentTaskType.INFRASTRUCTURE_ANALYSIS,
-            task_description="Analyze infrastructure dependencies and environment impact.",
-            agent_instruction=build_infrastructure_analysis_instruction(task_request),
-            expected_output_json_format=build_specialist_result_format(
-                focus="infrastructure"
-            ),
-            start_conditions=["Request input is validated and ready for planning."],
-            depends_on=[],
-            result_handoff_condition=(
-                "Forward the result when infrastructure dependencies, risks, "
-                "and proposed actions are returned in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "Infrastructure analysis identifies environment dependencies, "
-                "configuration impact, and required follow-up actions."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
-        ),
-        build_plan_step(
-            step_order=3,
-            owner_agent=SpecialistAgentName.CI_CD_AGENT,
-            task_type=AgentTaskType.CI_CD_ANALYSIS,
-            task_description="Analyze CI/CD impact, validation gates, and artifact flow.",
-            agent_instruction=build_ci_cd_analysis_instruction(task_request),
-            expected_output_json_format=build_specialist_result_format(focus="ci_cd"),
-            start_conditions=["Request input is validated and ready for planning."],
-            depends_on=[],
-            result_handoff_condition=(
-                "Forward the result when pipeline checks, test expectations, "
-                "and release-flow recommendations are returned in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "CI/CD analysis defines pipeline implications, required validation, "
-                "and artifact or release-flow actions."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
-        ),
-    ]
+    steps = build_analysis_steps(
+        task_request=task_request,
+        routing_decision=routing_decision,
+        base_context=base_context,
+        plan_risk_flags=plan_risk_flags,
+    )
 
     task_specific_step = build_task_specific_step(
         task_request=task_request,
-        risk_assessment=risk_assessment,
+        routing_decision=routing_decision,
         base_context=base_context,
+        plan_risk_flags=plan_risk_flags,
+        step_order=len(steps) + 1,
+        depends_on=[step.step_id for step in steps],
     )
     steps.append(task_specific_step)
 
+    if routing_decision.requires_human_resolution:
+        steps.append(
+            build_plan_step(
+                step_order=len(steps) + 1,
+                owner_agent=SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
+                task_type=AgentTaskType.FINAL_REPORT,
+                task_description="Prepare a blocked final report explaining the routing ambiguity.",
+                agent_instruction=(
+                    "Prepare the final structured report payload for the blocked "
+                    "workflow state and return JSON only."
+                ),
+                expected_output_json_format={
+                    "final_report": {
+                        "summary": "string",
+                        "executed_actions": ["string"],
+                        "blocked_actions": ["string"],
+                        "approvals": ["string"],
+                        "artifacts": ["string"],
+                    }
+                },
+                start_conditions=[
+                    "Routing ambiguity is recorded and no specialist execution started."
+                ],
+                depends_on=[task_specific_step.step_id],
+                result_handoff_condition=(
+                    "Forward the result when the report explains why routing could "
+                    "not continue and what clarification is required."
+                ),
+                required_input_context={
+                    **base_context,
+                    "aggregation_ready_after": task_specific_step.step_id,
+                },
+                expected_result=(
+                    "Final report payload explains the blocked workflow caused by "
+                    "ambiguous specialist routing."
+                ),
+                status=WorkflowStepStatus.PLANNED,
+                risk_flags=plan_risk_flags,
+                requires_user_approval=False,
+            )
+        )
+        return steps
+
     specialist_step_ids = [step.step_id for step in steps]
+    risk_review_step_order = len(steps) + 1
 
     steps.append(
         build_plan_step(
-            step_order=5,
+            step_order=risk_review_step_order,
             owner_agent=SpecialistAgentName.RISK_POLICY_AGENT,
             task_type=AgentTaskType.RISK_POLICY_REVIEW,
             task_description="Review proposed actions against risk and policy gates.",
@@ -152,7 +145,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                     }.items()
                     if value is not None
                 },
-                "aggregated_risk_flags": risk_assessment.risk_flags,
+                "aggregated_risk_flags": plan_risk_flags,
                 "specialist_steps": specialist_step_ids,
             },
             expected_result=(
@@ -160,15 +153,16 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                 "blocked, or requiring approval."
             ),
             status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
+            risk_flags=plan_risk_flags,
             requires_user_approval=False,
         )
     )
 
     if risk_assessment.requires_user_approval:
+        human_approval_step_order = len(steps) + 1
         steps.append(
             build_plan_step(
-                step_order=6,
+                step_order=human_approval_step_order,
                 owner_agent=SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
                 task_type=AgentTaskType.HUMAN_APPROVAL,
                 task_description="Request human approval for gated actions.",
@@ -183,7 +177,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                 start_conditions=[
                     "Risk/Policy Agent returned at least one action requiring approval."
                 ],
-                depends_on=["STEP-5"],
+                depends_on=[f"STEP-{risk_review_step_order}"],
                 result_handoff_condition=(
                     "Forward the result when a final human decision is recorded for "
                     "all approval-gated actions."
@@ -197,12 +191,17 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                     "for gated actions."
                 ),
                 status=WorkflowStepStatus.WAITING_FOR_APPROVAL,
-                risk_flags=risk_assessment.risk_flags,
+                risk_flags=plan_risk_flags,
                 requires_user_approval=True,
             )
         )
 
-    execution_dependencies = ["STEP-6"] if risk_assessment.requires_user_approval else ["STEP-5"]
+    execution_step_order = len(steps) + 1
+    execution_dependencies = (
+        [f"STEP-{execution_step_order - 1}"]
+        if risk_assessment.requires_user_approval
+        else [f"STEP-{risk_review_step_order}"]
+    )
     execution_status = (
         WorkflowStepStatus.BLOCKED
         if risk_assessment.requires_user_approval
@@ -218,7 +217,7 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
 
     steps.append(
         build_plan_step(
-            step_order=7 if risk_assessment.requires_user_approval else 6,
+            step_order=execution_step_order,
             owner_agent=SpecialistAgentName.EXECUTION_AGENT,
             task_type=AgentTaskType.EXECUTION_HANDOFF,
             task_description="Prepare approved actions for execution handoff.",
@@ -238,22 +237,27 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
             ),
             required_input_context={
                 **base_context,
-                "policy_decision_step": "STEP-5",
+                "policy_decision_step": f"STEP-{risk_review_step_order}",
             },
             expected_result=(
                 "Execution handoff contains only actions allowed by policy and, when "
                 "required, approved by a human reviewer."
             ),
             status=execution_status,
-            risk_flags=risk_assessment.risk_flags,
+            risk_flags=plan_risk_flags,
             requires_user_approval=False,
         )
     )
 
-    final_dependency = "STEP-6" if risk_assessment.requires_user_approval else "STEP-5"
+    final_report_step_order = len(steps) + 1
+    final_dependency = (
+        f"STEP-{execution_step_order - 1}"
+        if risk_assessment.requires_user_approval
+        else f"STEP-{risk_review_step_order}"
+    )
     steps.append(
         build_plan_step(
-            step_order=8 if risk_assessment.requires_user_approval else 7,
+            step_order=final_report_step_order,
             owner_agent=SpecialistAgentName.HUMAN_REVIEW_INTERFACE,
             task_type=AgentTaskType.FINAL_REPORT,
             task_description="Prepare final report payload for aggregation and publication.",
@@ -284,188 +288,54 @@ def build_workflow_plan(task_request: TaskRequest) -> list[WorkflowPlanStep]:
                 "to the source channel."
             ),
             status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
+            risk_flags=plan_risk_flags,
             requires_user_approval=False,
         )
     )
 
     return steps
-def build_task_specific_step(
+
+
+def build_analysis_steps(
+    *,
     task_request: TaskRequest,
-    risk_assessment: WorkflowRiskAssessment,
+    routing_decision: TaskRoutingDecision,
     base_context: dict[str, Any],
-) -> WorkflowPlanStep:
-    operation_type = task_request.standardized_work_item.operation_type
+    plan_risk_flags: list[str],
+) -> list[WorkflowPlanStep]:
+    if routing_decision.decision_type == RoutingDecisionType.AMBIGUOUS:
+        return []
 
-    if operation_type in {
-        OperationType.DEPLOY,
-        OperationType.ROLLBACK,
-        OperationType.RESTART,
-    }:
-        return build_plan_step(
-            step_order=4,
-            owner_agent=SpecialistAgentName.DEPLOYMENT_AGENT,
-            task_type=AgentTaskType.SERVICE_ROLLOUT,
-            task_description="Prepare the service rollout or recovery strategy.",
-            agent_instruction=(
-                "Create the service-level rollout strategy for the requested "
-                "operation, including sequencing, rollback readiness, and service "
-                "availability expectations."
-            ),
-            expected_output_json_format=build_specialist_result_format(
-                focus="service_rollout"
-            ),
-            start_conditions=[
-                "Deployment analysis, infrastructure analysis, and CI/CD analysis started."
-            ],
-            depends_on=["STEP-1", "STEP-2", "STEP-3"],
-            result_handoff_condition=(
-                "Forward the result when the rollout or recovery strategy clearly "
-                "maps actions, prerequisites, and rollback handling in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "Service rollout strategy is aligned with environment, release "
-                "parameters, and validation constraints."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
+    analysis_steps: list[WorkflowPlanStep] = []
+    for step_order, domain in enumerate(
+        [routing_decision.primary_domain, *routing_decision.supporting_domains],
+        start=1,
+    ):
+        if domain is None:
+            continue
+        analysis_steps.append(
+            build_domain_analysis_step(
+                task_request=task_request,
+                domain=domain,
+                base_context=base_context,
+                plan_risk_flags=plan_risk_flags,
+                step_order=step_order,
+            )
         )
-
-    if operation_type in {OperationType.SCALE, OperationType.CONFIGURE}:
-        return build_plan_step(
-            step_order=4,
-            owner_agent=SpecialistAgentName.INFRA_AGENT,
-            task_type=AgentTaskType.ENVIRONMENT_CHANGE,
-            task_description="Prepare the environment change procedure.",
-            agent_instruction=(
-                "Translate the requested infrastructure or configuration change "
-                "into an ordered environment procedure with dependency checks and "
-                "post-change validation points."
-            ),
-            expected_output_json_format=build_specialist_result_format(
-                focus="environment_change"
-            ),
-            start_conditions=[
-                "Deployment analysis, infrastructure analysis, and CI/CD analysis started."
-            ],
-            depends_on=["STEP-1", "STEP-2", "STEP-3"],
-            result_handoff_condition=(
-                "Forward the result when the environment change procedure defines "
-                "ordered actions, dependencies, and validation points in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "Environment change procedure is ready for risk and policy review."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
-        )
-
-    if operation_type in {
-        OperationType.PIPELINE,
-        OperationType.BUILD,
-        OperationType.TEST,
-        OperationType.RELEASE,
-    }:
-        return build_plan_step(
-            step_order=4,
-            owner_agent=SpecialistAgentName.CI_CD_AGENT,
-            task_type=AgentTaskType.PIPELINE_PROCEDURE,
-            task_description="Prepare the pipeline or release-flow procedure.",
-            agent_instruction=(
-                "Convert the requested CI/CD operation into an ordered pipeline "
-                "or release-flow procedure with required checks, artifacts, and "
-                "promotion criteria."
-            ),
-            expected_output_json_format=build_specialist_result_format(
-                focus="pipeline_procedure"
-            ),
-            start_conditions=[
-                "Deployment analysis, infrastructure analysis, and CI/CD analysis started."
-            ],
-            depends_on=["STEP-1", "STEP-2", "STEP-3"],
-            result_handoff_condition=(
-                "Forward the result when the pipeline procedure defines checks, "
-                "artifacts, and promotion criteria in JSON."
-            ),
-            required_input_context=base_context,
-            expected_result=(
-                "Pipeline or release-flow procedure is ready for risk and policy review."
-            ),
-            status=WorkflowStepStatus.PLANNED,
-            risk_flags=risk_assessment.risk_flags,
-            requires_user_approval=False,
-        )
-
-    return build_plan_step(
-        step_order=4,
-        owner_agent=SpecialistAgentName.INFRA_AGENT,
-        task_type=AgentTaskType.DIAGNOSTIC_PLAN,
-        task_description="Prepare the diagnostic investigation plan.",
-        agent_instruction=(
-            "Build a diagnostic investigation plan that identifies likely failure "
-            "domains, required evidence, and non-invasive verification steps."
-        ),
-        expected_output_json_format=build_specialist_result_format(
-            focus="diagnostic_plan"
-        ),
-        start_conditions=[
-            "Deployment analysis, infrastructure analysis, and CI/CD analysis started."
-        ],
-        depends_on=["STEP-1", "STEP-2", "STEP-3"],
-        result_handoff_condition=(
-            "Forward the result when the diagnostic plan lists hypotheses, evidence "
-            "requests, and verification steps in JSON."
-        ),
-        required_input_context=base_context,
-        expected_result=(
-            "Diagnostic investigation plan is ready for aggregation and policy review."
-        ),
-        status=WorkflowStepStatus.PLANNED,
-        risk_flags=risk_assessment.risk_flags,
-        requires_user_approval=False,
-    )
+    return analysis_steps
 
 
-def build_plan_step(
-    step_order: int,
-    owner_agent: SpecialistAgentName,
-    task_type: AgentTaskType,
-    task_description: str,
-    agent_instruction: str,
-    expected_output_json_format: dict[str, Any],
-    start_conditions: list[str],
-    depends_on: list[str],
-    result_handoff_condition: str,
-    required_input_context: dict[str, Any],
-    expected_result: str,
-    status: WorkflowStepStatus,
-    risk_flags: list[str],
-    requires_user_approval: bool,
-) -> WorkflowPlanStep:
-    return WorkflowPlanStep(
-        step_id=f"STEP-{step_order}",
-        owner_agent=owner_agent,
-        task_type=task_type,
-        task_description=task_description,
-        agent_instruction=agent_instruction,
-        step_order=step_order,
-        depends_on=depends_on,
-        expected_output_json_format=expected_output_json_format,
-        start_conditions=start_conditions,
-        result_handoff_condition=result_handoff_condition,
-        required_input_context=required_input_context,
-        expected_result=expected_result,
-        status=status,
-        risk_flags=risk_flags,
-        requires_user_approval=requires_user_approval,
-    )
+def combine_plan_risk_flags(
+    risk_assessment: WorkflowRiskAssessment,
+    routing_decision: TaskRoutingDecision,
+) -> list[str]:
+    combined_flags = risk_assessment.risk_flags + build_routing_risk_flags(routing_decision)
+    return list(dict.fromkeys(combined_flags))
 
 
-def build_base_context(task_request: TaskRequest) -> dict[str, Any]:
+def build_base_context(
+    task_request: TaskRequest, routing_decision: TaskRoutingDecision
+) -> dict[str, Any]:
     work_item = task_request.standardized_work_item
     return {
         "request_id": task_request.request_id,
@@ -478,4 +348,5 @@ def build_base_context(task_request: TaskRequest) -> dict[str, Any]:
         "operation_type": work_item.operation_type.value if work_item.operation_type else None,
         "execution_parameters": work_item.execution_parameters,
         "constraints": work_item.constraints,
+        "routing": build_routing_context(routing_decision),
     }

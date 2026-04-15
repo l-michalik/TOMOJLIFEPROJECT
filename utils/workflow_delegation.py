@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from deepagents import create_deep_agent
-
+from agents.specialist_base import BaseSpecialistAgent
 from contracts.agent_input import AgentExecutionInput
 from contracts.agent_output import (
-    AGENT_EXECUTION_STATUS_WORKFLOW_MEANINGS,
     AgentExecutionOutput,
     AgentExecutionStatus,
-    build_agent_execution_output_format,
 )
 from contracts.task_request import TaskRequest
 from contracts.task_response import (
@@ -23,9 +19,7 @@ from contracts.task_response import (
     WorkflowStepState,
     WorkflowStepStatus,
 )
-from settings.supervisor import get_openai_model
 from settings.supervisor import is_live_ai_enabled
-from utils.supervisor import read_last_message_text
 from utils.specialist_step_contract import (
     build_primary_error_payload,
     build_step_agent_name,
@@ -34,7 +28,6 @@ from utils.specialist_step_contract import (
     build_step_system_prompt,
     map_agent_status_to_workflow_status,
 )
-from utils.workflow_logging import get_application_logger, log_ai_request, log_ai_response
 from utils.workflow_policy import (
     apply_policy_decision_states,
     build_fallback_step_response as build_policy_fallback_step_response,
@@ -52,7 +45,6 @@ StepRunner = Callable[
     dict[str, Any],
 ]
 CheckpointCallback = Callable[[dict[str, Any]], None]
-logger = get_application_logger("utils.workflow_delegation")
 
 
 def delegate_workflow_plan(
@@ -384,67 +376,21 @@ def run_specialist_step(
     if not is_live_ai_enabled():
         return build_fallback_step_response(step, task_request, dependency_results)
 
-    prompt = build_step_prompt(
-        step=step,
-        task_request=task_request,
-        dependency_results=dependency_results,
-    )
-    log_ai_request(
-        logger,
-        request_id=task_request.request_id,
-        model=model,
-        prompt=prompt,
-        agent_name=step.owner_agent.value,
-        step_id=step.step_id,
-        generic_prompt=build_step_request_log_summary(step.owner_agent),
-        owner_agent=step.owner_agent.value,
-        task_description=step.task_description,
-        status=step.status.value,
-    )
-    agent = create_deep_agent(
-        model=get_openai_model(explicit_model=model),
-        system_prompt=build_step_system_prompt(step.owner_agent),
-        name=build_step_agent_name(step.owner_agent),
-    )
-    result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
-    raw_text = read_last_message_text(result)
-    log_ai_response(
-        logger,
-        request_id=task_request.request_id,
-        model=model,
-        response_text=raw_text,
-        agent_name=step.owner_agent.value,
-        step_id=step.step_id,
-        generic_response=build_step_response_log_summary(step.owner_agent),
-        owner_agent=step.owner_agent.value,
-    )
-    try:
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
-        return build_fallback_step_response(step, task_request, dependency_results)
-
-
-def build_step_prompt(
-    step: WorkflowPlanStep,
-    task_request: TaskRequest,
-    dependency_results: dict[str, Any],
-) -> str:
     agent_input = build_agent_execution_input(
         step=step,
         task_request=task_request,
         dependency_results=dependency_results,
     )
-    return (
-        "Execute the assigned workflow step using the standardized agent input contract.\n\n"
-        "Agent input JSON:\n"
-        f"{agent_input.model_dump_json(indent=2)}\n\n"
-        "Return only valid JSON with this structure:\n"
-        f"{json.dumps(build_agent_execution_output_format(step.expected_output_json_format), ensure_ascii=True, indent=2)}\n"
-        "The result payload must follow this expected format:\n"
-        f"{json.dumps(step.expected_output_json_format, ensure_ascii=True)}\n"
-        "Status meanings for workflow continuation:\n"
-        f"{json.dumps({status.value: meaning for status, meaning in AGENT_EXECUTION_STATUS_WORKFLOW_MEANINGS.items()}, ensure_ascii=True, indent=2)}\n"
+    specialist_agent = BaseSpecialistAgent(
+        model=model,
+        owner_agent=step.owner_agent.value,
+        system_prompt=build_step_system_prompt(step.owner_agent),
+        agent_name=build_step_agent_name(step.owner_agent),
+        tools=build_specialist_tools(step),
+        request_log_summary=build_step_request_log_summary(step.owner_agent),
+        response_log_summary=build_step_response_log_summary(step.owner_agent),
     )
+    return specialist_agent.run(agent_input).model_dump(mode="json")
 
 
 def build_agent_execution_input(
@@ -482,6 +428,10 @@ def build_fallback_step_response(
         task_request=task_request,
         dependency_results=dependency_results,
     )
+
+
+def build_specialist_tools(step: WorkflowPlanStep) -> list[Any]:
+    return []
 
 
 def utc_now() -> datetime:

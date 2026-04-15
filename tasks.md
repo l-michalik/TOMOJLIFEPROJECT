@@ -1,4 +1,4 @@
-Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Przygotować wspólny format odpowiedzi agentów wykonawczych zgodny ze specyfikacją. Kontrakt wyjściowy ma zwracać co najmniej result, logs i status, a dodatkowo szczegóły wykonanych analiz lub rekomendowanych akcji, listę artefaktów, błędy techniczne, ostrzeżenia oraz dane wymagane do agregacji przez Supervisora. Należy jednoznacznie opisać dopuszczalne statusy i ich znaczenie dla dalszego workflow.>
+Na podstawie specyfikacji projektu zawartej w folderze docs/project_specification.MD, wykonaj zadanie : <Zaimplementować wspólną bazę techniczną dla wszystkich agentów wykonawczych. Należy przygotować komponent lub klasę bazową obsługującą przyjęcie wejścia, walidację kontraktu, budowę kontekstu roboczego, uruchomienie promptu, wywołanie narzędzi, zapis logów, formatowanie wyniku oraz obsługę błędów. Rozwiązanie ma umożliwiać szybkie tworzenie kolejnych agentów specjalistycznych bez duplikowania wspólnej logiki.>
 
 Projekt ma być moją wizytówką, ze znam biblioteke langchain deepagents i opanowalem ją na poziomie senior developera.
 

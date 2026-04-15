@@ -172,7 +172,6 @@ class BaseSpecialistAgent:
             tools=self.get_tools(working_context),
             system_prompt=self.system_prompt,
             name=self.agent_name,
-            max_tokens=self.max_output_tokens,
         )
         result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
         return read_last_message_text(result)

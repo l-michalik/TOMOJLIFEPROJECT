@@ -9,7 +9,6 @@ from settings.supervisor import (
     SUPERVISOR_AGENT_NAME,
     SUPERVISOR_SYSTEM_PROMPT,
     get_openai_model,
-    get_supervisor_max_output_tokens,
     is_live_ai_enabled,
 )
 from utils.supervisor import (
@@ -40,7 +39,6 @@ def create_supervisor_agent(model: str | None = None):
         system_prompt=SUPERVISOR_SYSTEM_PROMPT,
         subagents=SPECIALIST_SUBAGENTS,
         name=SUPERVISOR_AGENT_NAME,
-        max_tokens=get_supervisor_max_output_tokens(),
     )
 
 

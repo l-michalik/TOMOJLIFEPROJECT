@@ -41,7 +41,7 @@ APP_AI_MODE=mock
 OPENAI_MODEL=openai:gpt-5.4-mini
 ```
 
-Recommended smoke-test or staging setup:
+Recommended staging setup:
 
 ```env
 APP_AI_MODE=live
@@ -67,20 +67,6 @@ Healthcheck:
 
 ```bash
 curl http://127.0.0.1:8000/health
-```
-
-## Run tests
-
-Run the full test suite:
-
-```bash
-uv run python -m unittest discover -s tests -v
-```
-
-Run a single test module:
-
-```bash
-uv run python -m unittest tests/test_task_request.py -v
 ```
 
 Basic request:

@@ -570,34 +570,15 @@ Wymagania:
 - tracing i ewaluacja: `LangSmith` lub `OpenTelemetry`,
 - CI/CD: `GitHub Actions` lub `Jenkins`.
 
-## 17. Testy i walidacja jakości
+## 17. Plan wdrożenia
 
-System powinien posiadać:
+### 17.1 Środowiska
 
-- testy jednostkowe walidacji wejścia i planowania,
-- testy kontraktów JSON między agentami,
-- testy integracyjne workflow end-to-end,
-- testy polityk autoryzacji i scenariuszy blokowania działań,
-- testy odporności na timeouty, błędy narzędzi i przerwane wykonania,
-- testy regresyjne raportowania i checkpointingu.
-
-Kluczowe scenariusze testowe:
-
-- request kompletny i bezpieczny kończy się raportem `completed`,
-- request z brakującymi danymi kończy się stanem `waiting_for_input`,
-- akcja zabroniona przez politykę kończy się stanem `blocked`,
-- akcja wymagająca akceptacji nie jest wykonana przed zgodą użytkownika,
-- awaria agenta specjalistycznego nie skutkuje utratą stanu workflow.
-
-## 18. Plan wdrożenia
-
-### 18.1 Środowiska
-
-- `DEV` dla lokalnego rozwoju i testów,
+- `DEV` dla lokalnego rozwoju,
 - `STAGE` jako środowisko zbliżone do produkcyjnego,
 - `PROD` dla ruchu produkcyjnego.
 
-### 18.2 Strategia wdrożeń
+### 17.2 Strategia wdrożeń
 
 - infrastruktura jako kod,
 - konteneryzacja komponentów,
@@ -605,7 +586,7 @@ Kluczowe scenariusze testowe:
 - strategia `Blue-Green` albo `Rolling Update` zależnie od komponentu,
 - przygotowany plan rollbacku.
 
-## 19. Roadmapa
+## 18. Roadmapa
 
 ### Etap 0. Przygotowanie
 
@@ -636,7 +617,7 @@ Kluczowe scenariusze testowe:
 - testy chaos,
 - optymalizacje wydajnościowe i kosztowe.
 
-## 20. Artefakty końcowe projektu
+## 19. Artefakty końcowe projektu
 
 - kod źródłowy komponentów i integracji,
 - dokumentacja techniczna i wdrożeniowa,
@@ -645,6 +626,6 @@ Kluczowe scenariusze testowe:
 - dashboardy obserwowalności,
 - scenariusz demo z pełnym przebiegiem workflow.
 
-## 21. Podsumowanie architektoniczne
+## 20. Podsumowanie architektoniczne
 
 Projekt zakłada ścisłe rozdzielenie odpowiedzialności między planowaniem, oceną ryzyka i wykonaniem. `Supervisor` pełni rolę nadrzędnego koordynatora procesu, ale nie jest komponentem wykonawczym. Każda planowana akcja przechodzi przez ocenę `Risk/Policy Agent`, a działania wysokiego ryzyka wymagają jawnej autoryzacji użytkownika. Taki model zapewnia audytowalność, bezpieczeństwo, możliwość wznowienia procesów oraz kontrolowaną automatyzację operacji DevOps.
